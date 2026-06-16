@@ -8,8 +8,8 @@
 #   make install
 # See below option statements and the README for build information
 
-cmake_minimum_required(VERSION 3.9)
-project(wfa2lib LANGUAGES C)
+cmake_minimum_required(VERSION 3.16)
+project(wfa2lib)
 
 set(CMAKE_CXX_STANDARD 17)
 
@@ -32,9 +32,8 @@ option(EXTRA_FLAGS "Add optimization flags for C/C++ compiler" OFF)
 # include(CheckIPOSupported) # adds lto
 # check_ipo_supported(RESULT ipo_supported OUTPUT output)
 
-# New settings added to simplify rust binding build
-SET(BUILD_SHARED_LIB FALSE)
-SET(BUILD_CXX_BINDING_LIB FALSE)
+option(BUILD_SHARED_LIB "Build shared WFA2 library" OFF)
+option(BUILD_CXX_BINDING_LIB "Build C++ binding library" OFF)
 
 # ---- Dependencies
 
@@ -51,7 +50,7 @@ find_package(Threads)
 set_package_properties(Threads PROPERTIES TYPE REQUIRED)
 
 # ---- Build switches
-set(CMAKE_POSITION_INDEPENDENT_CODE OFF)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ${ipo_supported})
 
 if(NOT CMAKE_BUILD_TYPE)
@@ -162,7 +161,9 @@ endif ()
 
 if(OPENMP)
   target_link_libraries(wfa2_static PRIVATE OpenMP::OpenMP_C)
-  target_link_libraries(wfa2 PRIVATE OpenMP::OpenMP_C)
+  if (BUILD_SHARED_LIB)
+    target_link_libraries(wfa2 PRIVATE OpenMP::OpenMP_C)
+  endif ()
 endif(OPENMP)
 
 # ---- C++ binding library
@@ -175,17 +176,21 @@ if (BUILD_CXX_BINDING_LIB)
       bindings/cpp/*.h*
       )
     add_library(wfa2cpp_static STATIC ${wfa2cpp_SOURCE})
-    add_library(wfa2cpp SHARED ${wfa2cpp_SOURCE})
-    set_target_properties(wfa2cpp PROPERTIES SOVERSION 0)
     set_target_properties(wfa2cpp_static PROPERTIES OUTPUT_NAME wfa2cpp)
-    target_link_libraries(wfa2cpp PUBLIC wfa2)
     target_link_libraries(wfa2cpp_static PUBLIC wfa2_static)
-    add_library(wfa2::wfa2cpp ALIAS wfa2cpp)
     add_library(wfa2::wfa2cpp_static ALIAS wfa2cpp_static)
+    if (BUILD_SHARED_LIB)
+      add_library(wfa2cpp SHARED ${wfa2cpp_SOURCE})
+      set_target_properties(wfa2cpp PROPERTIES SOVERSION 0)
+      target_link_libraries(wfa2cpp PUBLIC wfa2)
+      add_library(wfa2::wfa2cpp ALIAS wfa2cpp)
+    endif ()
 
     if(OPENMP)
       target_link_libraries(wfa2cpp_static PRIVATE OpenMP::OpenMP_CXX)
-      target_link_libraries(wfa2cpp PRIVATE OpenMP::OpenMP_CXX)
+      if (BUILD_SHARED_LIB)
+        target_link_libraries(wfa2cpp PRIVATE OpenMP::OpenMP_CXX)
+      endif ()
     endif(OPENMP)
 endif ()
 
@@ -238,9 +243,14 @@ add_executable(align_benchmark
   tools/align_benchmark/indel/indel_dp.c
 )
 target_include_directories(align_benchmark PUBLIC . wavefront system utils tools/align_benchmark)
-add_dependencies(align_benchmark wfa2)
 target_link_libraries(align_benchmark m)
-target_link_libraries(align_benchmark wfa2)
+if (BUILD_SHARED_LIB)
+  add_dependencies(align_benchmark wfa2)
+  target_link_libraries(align_benchmark wfa2)
+else ()
+  add_dependencies(align_benchmark wfa2_static)
+  target_link_libraries(align_benchmark wfa2_static)
+endif ()
 if(OPENMP)
   target_link_libraries(align_benchmark OpenMP::OpenMP_C)
 endif(OPENMP)
@@ -274,10 +284,12 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
   install(FILES ${SYSTEM_INCLUDES} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/wfa2lib/system)
 
   if (BUILD_CXX_BINDING_LIB)
-      install(TARGETS wfa2cpp ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
       install(TARGETS wfa2cpp_static ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+      if (BUILD_SHARED_LIB)
+          install(TARGETS wfa2cpp ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+      endif ()
+      install(FILES ${CPP_INCLUDES} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/wfa2lib/bindings/cpp)
   endif ()
-  install(FILES ${CPP_INCLUDES} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/wfa2lib/bindings/cpp)
 
   configure_file(${CMAKE_SOURCE_DIR}/libwfa2.pc.in ${CMAKE_BINARY_DIR}/libwfa2.pc @ONLY)
   install(FILES ${CMAKE_BINARY_DIR}/libwfa2.pc DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
