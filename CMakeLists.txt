@@ -32,6 +32,9 @@ option(EXTRA_FLAGS "Add optimization flags for C/C++ compiler" OFF)
 # include(CheckIPOSupported) # adds lto
 # check_ipo_supported(RESULT ipo_supported OUTPUT output)
 
+option(BUILD_SHARED_LIB "Build shared WFA2 library" OFF)
+option(BUILD_CXX_BINDING_LIB "Build C++ binding library" OFF)
+
 # ---- Dependencies
 
 if(OPENMP)
@@ -56,7 +59,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 if (${CMAKE_BUILD_TYPE} MATCHES Release)
-  set(OPTIMIZE_FLAGS "${OPTIMIZE_FLAGS} -march=native -D_FILE_OFFSET_BITS=64")
+  set(OPTIMIZE_FLAGS "${OPTIMIZE_FLAGS} -D_FILE_OFFSET_BITS=64")
 endif()
 
 if ((${CMAKE_BUILD_TYPE} MATCHES Release) OR (${CMAKE_BUILD_TYPE} MATCHES RelWithDebInfo))
@@ -144,43 +147,52 @@ set(wfa2lib_SOURCE
   alignment/score_matrix.c
 )
 
-add_library(wfa2_static
-    ${wfa2lib_SOURCE}
-    )
-add_library(wfa2 SHARED ${wfa2lib_SOURCE})
+add_library(wfa2_static STATIC ${wfa2lib_SOURCE})
 set_target_properties(wfa2_static PROPERTIES OUTPUT_NAME wfa2)
-set_target_properties(wfa2 PROPERTIES SOVERSION 0)
-target_include_directories(wfa2 PUBLIC . wavefront utils)
 target_include_directories(wfa2_static PUBLIC . wavefront utils)
-add_library(wfa2::wfa2 ALIAS wfa2)
 add_library(wfa2::wfa2_static ALIAS wfa2_static)
+
+if (BUILD_SHARED_LIB)
+    add_library(wfa2 SHARED ${wfa2lib_SOURCE})
+    set_target_properties(wfa2 PROPERTIES SOVERSION 0)
+    target_include_directories(wfa2 PUBLIC . wavefront utils)
+    add_library(wfa2::wfa2 ALIAS wfa2)
+endif ()
 
 if(OPENMP)
   target_link_libraries(wfa2_static PRIVATE OpenMP::OpenMP_C)
-  target_link_libraries(wfa2 PRIVATE OpenMP::OpenMP_C)
+  if (BUILD_SHARED_LIB)
+    target_link_libraries(wfa2 PRIVATE OpenMP::OpenMP_C)
+  endif ()
 endif(OPENMP)
 
 # ---- C++ binding library
 
-set(wfa2cpp_SOURCE
-  bindings/cpp/WFAligner.cpp
-)
-file(GLOB CPP_INCLUDES
-  bindings/cpp/*.h*
-  )
-add_library(wfa2cpp_static STATIC ${wfa2cpp_SOURCE})
-add_library(wfa2cpp SHARED ${wfa2cpp_SOURCE})
-set_target_properties(wfa2cpp PROPERTIES SOVERSION 0)
-set_target_properties(wfa2cpp_static PROPERTIES OUTPUT_NAME wfa2cpp)
-target_link_libraries(wfa2cpp PUBLIC wfa2)
-target_link_libraries(wfa2cpp_static PUBLIC wfa2_static)
-add_library(wfa2::wfa2cpp ALIAS wfa2cpp)
-add_library(wfa2::wfa2cpp_static ALIAS wfa2cpp_static)
+if (BUILD_CXX_BINDING_LIB)
+    set(wfa2cpp_SOURCE
+      bindings/cpp/WFAligner.cpp
+    )
+    file(GLOB CPP_INCLUDES
+      bindings/cpp/*.h*
+      )
+    add_library(wfa2cpp_static STATIC ${wfa2cpp_SOURCE})
+    set_target_properties(wfa2cpp_static PROPERTIES OUTPUT_NAME wfa2cpp)
+    target_link_libraries(wfa2cpp_static PUBLIC wfa2_static)
+    add_library(wfa2::wfa2cpp_static ALIAS wfa2cpp_static)
+    if (BUILD_SHARED_LIB)
+      add_library(wfa2cpp SHARED ${wfa2cpp_SOURCE})
+      set_target_properties(wfa2cpp PROPERTIES SOVERSION 0)
+      target_link_libraries(wfa2cpp PUBLIC wfa2)
+      add_library(wfa2::wfa2cpp ALIAS wfa2cpp)
+    endif ()
 
-if(OPENMP)
-  target_link_libraries(wfa2cpp_static PRIVATE OpenMP::OpenMP_CXX)
-  target_link_libraries(wfa2cpp PRIVATE OpenMP::OpenMP_CXX)
-endif(OPENMP)
+    if(OPENMP)
+      target_link_libraries(wfa2cpp_static PRIVATE OpenMP::OpenMP_CXX)
+      if (BUILD_SHARED_LIB)
+        target_link_libraries(wfa2cpp PRIVATE OpenMP::OpenMP_CXX)
+      endif ()
+    endif(OPENMP)
+endif ()
 
 # ---- Get version
 
@@ -231,9 +243,14 @@ add_executable(align_benchmark
   tools/align_benchmark/indel/indel_dp.c
 )
 target_include_directories(align_benchmark PUBLIC . wavefront system utils tools/align_benchmark)
-add_dependencies(align_benchmark wfa2)
 target_link_libraries(align_benchmark m)
-target_link_libraries(align_benchmark wfa2)
+if (BUILD_SHARED_LIB)
+  add_dependencies(align_benchmark wfa2)
+  target_link_libraries(align_benchmark wfa2)
+else ()
+  add_dependencies(align_benchmark wfa2_static)
+  target_link_libraries(align_benchmark wfa2_static)
+endif ()
 if(OPENMP)
   target_link_libraries(align_benchmark OpenMP::OpenMP_C)
 endif(OPENMP)
@@ -257,16 +274,22 @@ add_wfa_test()
 # Do not install anything when used with FetchContent
 if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
   install(TARGETS wfa2_static ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} )
-  install(TARGETS wfa2 ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} )
+  if (BUILD_SHARED_LIB)
+      install(TARGETS wfa2 ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} )
+  endif ()
 
   install(FILES ${INCLUDES} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/wfa2lib/wavefront)
   install(FILES ${UTILS_INCLUDES} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/wfa2lib/utils)
   install(FILES ${ALIGNMENT_INCLUDES} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/wfa2lib/alignment)
   install(FILES ${SYSTEM_INCLUDES} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/wfa2lib/system)
 
-  install(TARGETS wfa2cpp ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
-  install(TARGETS wfa2cpp_static ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
-  install(FILES ${CPP_INCLUDES} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/wfa2lib/bindings/cpp)
+  if (BUILD_CXX_BINDING_LIB)
+      install(TARGETS wfa2cpp_static ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+      if (BUILD_SHARED_LIB)
+          install(TARGETS wfa2cpp ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+      endif ()
+      install(FILES ${CPP_INCLUDES} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/wfa2lib/bindings/cpp)
+  endif ()
 
   configure_file(${CMAKE_SOURCE_DIR}/libwfa2.pc.in ${CMAKE_BINARY_DIR}/libwfa2.pc @ONLY)
   install(FILES ${CMAKE_BINARY_DIR}/libwfa2.pc DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
