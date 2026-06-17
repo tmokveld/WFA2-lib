@@ -1,6 +1,6 @@
 # WFA2-lib + Singletrack
 
-This version of WFA2-lib includes uses Singletrack for the traceback. It also includes optimizations that store only a scope of the indel matrices during alignment, rather than the full matrices, for both gap-affine and dual gap-affine alignments. This integration is compatible with global alignments using the library's high memory option (See https://github.com/LorienLV/singletrack/ for details).
+This version of WFA2-lib includes Singletrack for the traceback. It also includes optimizations that store only a scope of the indel matrices during alignment, rather than the full matrices, for both gap-affine and dual gap-affine alignments. This integration is compatible with end-to-end and ends-free alignments using the library's singletrack memory option (See https://github.com/LorienLV/singletrack/ for details).
 
 ## 1. INTRODUCTION
 
@@ -419,7 +419,7 @@ The WFA2 library allows computing alignments with different spans or shapes. Alt
 
 The WFA2 library implements various memory modes: `wavefront_memory_high`, `wavefront_memory_med`, `wavefront_memory_low`, `wavefront_memory_ultralow`, and `wavefront_memory_singletrack`. These modes allow regulating the overall memory consumption. The standard WFA algorithm, which stores explicitly all wavefronts in memory, correspond to the mode `wavefront_memory_high`. Memory modes `wavefront_memory_med` and `wavefront_memory_low` progressively reduce memory usage at the expense of slightly larger alignment times. Memory mode `wavefront_memory_ultralow` utilizes the BiWFA algorithm using a minimal memory footprint of `O(s)` and the same `O(ns+s^2)` time complexity as the original WFA. In practice, `wavefront_memory_ultralow` can outperform `wavefront_memory_high` because the latter experiences memory slowdowns when aligning long and noisy sequences.
 
-Memory mode `wavefront_memory_singletrack` enables the Singletrack traceback for full global gap-affine and dual gap-affine alignments. It stores all M wavefronts and reuses the indel wavefronts needed during computation, then reconstructs an optimal CIGAR from the M wavefronts. It is not available for score-only, ends-free, extension, heuristic, non-affine, or BiWFA alignments. Singletrack follows the reference implementation and directly accesses padded sequence buffers; use ASCII or packed2bits inputs. Custom lambda sequence mode is not supported.
+Memory mode `wavefront_memory_singletrack` enables the Singletrack traceback for full-scope end-to-end and ends-free gap-affine and dual gap-affine alignments. It stores all M wavefronts and reuses the indel wavefronts needed during computation, then reconstructs an optimal CIGAR from the M wavefronts. It is not available for score-only, extension, heuristic, non-affine, or BiWFA alignments. Singletrack follows the reference implementation and directly accesses padded sequence buffers; use ASCII or packed2bits inputs. Custom lambda sequence mode is not supported.
 
 Memory modes can be used transparently with other alignment options and generate identical results. Note that this option does not affect the score-only alignment mode, which always uses a minimal memory footprint of `O(s)`).
 

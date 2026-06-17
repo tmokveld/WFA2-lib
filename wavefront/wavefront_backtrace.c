@@ -681,6 +681,82 @@ check_cigar_backtrace_affine_m_only(const wavefront_penalties_t* const penalties
 
 #endif
 
+static int wavefront_backtrace_m_only_count_backward_matches(
+    wavefront_aligner_t* const wf_aligner,
+    const int v,
+    const int h) {
+  const char* const pattern = wf_aligner->sequences.pattern;
+  const char* const text = wf_aligner->sequences.text;
+  const int max_matches = MIN(v,h);
+  int nmatches = 0;
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+  // Blocked backwards extend, bounded to avoid reading before free-start edges.
+  while (nmatches + 8 <= max_matches) {
+    const uint64_t* const pattern_block = (uint64_t*)(pattern + v - nmatches - 8);
+    const uint64_t* const text_block = (uint64_t*)(text + h - nmatches - 8);
+    const uint64_t cmp = *pattern_block ^ *text_block;
+    if (cmp != 0) {
+      const int equal_left_bits = __builtin_clzl(cmp);
+      nmatches += DIV_FLOOR(equal_left_bits,8);
+      return nmatches;
+    }
+    nmatches += 8;
+  }
+#endif
+  while (nmatches < max_matches &&
+         pattern[v-nmatches-1] == text[h-nmatches-1]) {
+    ++nmatches;
+  }
+  return nmatches;
+}
+
+static bool wavefront_backtrace_m_only_is_begin_free(
+    wavefront_aligner_t* const wf_aligner,
+    const int score,
+    const int v,
+    const int h) {
+  const alignment_form_t* const form = &wf_aligner->alignment_form;
+  const wavefront_penalties_t* const penalties = &wf_aligner->penalties;
+  if (form->span != alignment_endsfree || penalties->match >= 0) return false;
+
+  const int match_score = -penalties->match;
+  if (v == 0 && h > 0 && h <= form->text_begin_free &&
+      score == h * match_score) {
+    return true;
+  }
+  if (h == 0 && v > 0 && v <= form->pattern_begin_free &&
+      score == v * match_score) {
+    return true;
+  }
+  return false;
+}
+
+static void wavefront_backtrace_m_only_add_begin_free(
+    cigar_t* const cigar,
+    const int v,
+    const int h) {
+  int i;
+  for (i=0;i<h;++i) {
+    cigar->operations[(cigar->begin_offset)--] = 'I';
+  }
+  for (i=0;i<v;++i) {
+    cigar->operations[(cigar->begin_offset)--] = 'D';
+  }
+}
+
+static bool wavefront_backtrace_m_only_try_begin_free(
+    wavefront_aligner_t* const wf_aligner,
+    cigar_t* const cigar,
+    const int score,
+    const int v,
+    const int h) {
+  if (!wavefront_backtrace_m_only_is_begin_free(wf_aligner,score,v,h)) {
+    return false;
+  }
+  wavefront_backtrace_m_only_add_begin_free(cigar,v,h);
+  return true;
+}
+
 /**
  * Retrieve the cigar of the alignment for gap-affine and dual gap-affine
  * using exclusively the information in the M matrix (M wavefronts). This is
@@ -755,43 +831,16 @@ void wavefront_backtrace_affine_m_only(
       v = WAVEFRONT_V(k, offset);
       h = WAVEFRONT_H(k, offset);
 
-      int nmatches = 0;
-
-      // TODO: Function to backwards extend?
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-      // Blocked backwards extend.
-      const uint64_t* pattern_blocks = (uint64_t*)(wf_aligner->sequences.pattern + v - 8);
-      const uint64_t* text_blocks = (uint64_t*)(wf_aligner->sequences.text + h - 8);
-
-      uint64_t cmp = *pattern_blocks ^ *text_blocks;
-      while (__builtin_expect(cmp==0,0)) {
-        // Next blocks
-        --pattern_blocks;
-        --text_blocks;
-
-        nmatches += 8;
-
-        // Compare
-        cmp = *pattern_blocks ^ *text_blocks;
+      if (wavefront_backtrace_m_only_try_begin_free(
+              wf_aligner,cigar,score,v,h)) {
+        score = 0;
+        k = 0;
+        offset = 0;
+        break;
       }
 
-      const int equal_left_bits = __builtin_clzl(cmp);
-      const int equal_chars = DIV_FLOOR(equal_left_bits, 8);
-
-      nmatches += equal_chars;
-#else
-      // Char-wise backwards extend.
-      const char* pattern_ptr = wf_aligner->sequences.pattern + v - 1;
-      const char* text_ptr = wf_aligner->sequences.text + h - 1;
-
-      while (*pattern_ptr == *text_ptr) {
-        // Next chars
-        --pattern_ptr;
-        --text_ptr;
-
-        ++nmatches;
-      }
-#endif
+      const int nmatches =
+          wavefront_backtrace_m_only_count_backward_matches(wf_aligner,v,h);
 
       const int mismatch = score - penalties->mismatch;
       const wavefront_t* const mwavefront = (mismatch >= 0) ?
@@ -799,6 +848,18 @@ void wavefront_backtrace_affine_m_only(
         : NULL;
 
       offset_orig = offset - nmatches;
+
+      const int v_orig = WAVEFRONT_V(k, offset_orig);
+      const int h_orig = WAVEFRONT_H(k, offset_orig);
+      if (wavefront_backtrace_m_only_is_begin_free(
+              wf_aligner,score,v_orig,h_orig)) {
+        wavefront_backtrace_add_lut_to_cigar(cigar, matches_lut, nmatches);
+        wavefront_backtrace_m_only_add_begin_free(cigar,v_orig,h_orig);
+        score = 0;
+        k = 0;
+        offset = 0;
+        break;
+      }
 
       // If we come from a mismatch, then the backwards extend is correct.
       if (mwavefront != NULL &&
@@ -955,11 +1016,25 @@ void wavefront_backtrace_affine_m_only(
     assert(penalties->gap_extension2 > 0);
   }
 
-  wavefront_backtrace_add_lut_to_cigar(cigar, matches_lut, offset);
-  offset = 0;
+  v = WAVEFRONT_V(k, offset);
+  h = WAVEFRONT_H(k, offset);
+  if (in_mmatrix) {
+    const int num_matches = MIN(v,h);
+    wavefront_backtrace_add_lut_to_cigar(cigar, matches_lut, num_matches);
+    v -= num_matches;
+    h -= num_matches;
+    while (v > 0) {
+      cigar->operations[(cigar->begin_offset)--] = 'D';
+      --v;
+    }
+    while (h > 0) {
+      cigar->operations[(cigar->begin_offset)--] = 'I';
+      --h;
+    }
+  }
 
   // DEBUG
-  if (offset != 0 || k != 0 || (score != 0 && penalties->match == 0)) {
+  if (v != 0 || h != 0 || (score != 0 && penalties->match == 0)) {
     fprintf(stderr,"[WFA::Backtrace] I?/D?-Beginning backtrace error\n");
     fprintf(stderr,">%.*s\n",pattern_length,sequences->pattern);
     fprintf(stderr,"<%.*s\n",text_length,sequences->text);

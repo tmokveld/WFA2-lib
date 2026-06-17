@@ -74,8 +74,12 @@ void wavefront_align_presets__checks(
       fprintf(stderr,"[WFA] Singletrack memory mode requires full alignment scope\n");
       exit(1);
     }
-    if (form->span != alignment_end2end || wf_aligner->alignment_form.extension) {
-      fprintf(stderr,"[WFA] Singletrack memory mode only supports global end-to-end alignments\n");
+    if (wf_aligner->alignment_form.extension) {
+      fprintf(stderr,"[WFA] Singletrack memory mode does not support extension alignments\n");
+      exit(1);
+    }
+    if (form->span != alignment_end2end && form->span != alignment_endsfree) {
+      fprintf(stderr,"[WFA] Singletrack memory mode only supports end-to-end and ends-free alignments\n");
       exit(1);
     }
     if (wf_aligner->heuristic.strategy != wf_heuristic_none) {

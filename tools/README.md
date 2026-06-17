@@ -189,8 +189,8 @@ checkout branch `benchmark`.
 
 ```                                                                  
           --wfa-memory high|med|low|ultralow|singletrack
-            Selects the WFA memory mode. The singletrack mode is available for full global
-            gap-affine and dual gap-affine WFA alignments without heuristics. Singletrack
+            Selects the WFA memory mode. The singletrack mode is available for full-scope
+            global and ends-free gap-affine and dual gap-affine WFA alignments without heuristics. Singletrack
             directly accesses padded sequence buffers; use ASCII or packed2bits inputs.
 
           --minimum-wavefront-length <INT>
