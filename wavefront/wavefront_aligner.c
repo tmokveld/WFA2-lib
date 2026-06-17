@@ -423,6 +423,28 @@ wavefront_aligner_t* wavefront_aligner_new(
     wavefront_aligner_attr_t* attributes) {
   // Parameters
   if (attributes == NULL) attributes = &wavefront_aligner_attr_default;
+  if (attributes->memory_mode == wavefront_memory_singletrack) {
+    const bool supported_metric =
+        attributes->distance_metric == gap_affine ||
+        attributes->distance_metric == gap_affine_2p;
+    if (!supported_metric) {
+      fprintf(stderr,"[WFA] Singletrack memory mode only supports gap-affine and gap-affine-2p distances\n");
+      exit(1);
+    }
+    if (attributes->alignment_scope != compute_alignment) {
+      fprintf(stderr,"[WFA] Singletrack memory mode requires full alignment scope\n");
+      exit(1);
+    }
+    if (attributes->alignment_form.span != alignment_end2end ||
+        attributes->alignment_form.extension) {
+      fprintf(stderr,"[WFA] Singletrack memory mode only supports global end-to-end alignments\n");
+      exit(1);
+    }
+    if (attributes->heuristic.strategy != wf_heuristic_none) {
+      fprintf(stderr,"[WFA] Singletrack memory mode does not support WFA heuristics\n");
+      exit(1);
+    }
+  }
   const bool score_only = (attributes->alignment_scope == compute_score);
   const bool memory_succint =
       attributes->memory_mode == wavefront_memory_med ||
@@ -726,6 +748,7 @@ void wavefront_aligner_print_conf(
     case wavefront_memory_med: fprintf(stream,"MMed"); break;
     case wavefront_memory_low: fprintf(stream,"MLow"); break;
     case wavefront_memory_ultralow: fprintf(stream,"BiWFA"); break;
+    case wavefront_memory_singletrack: fprintf(stream,"MSingletrack"); break;
   }
   if (wf_aligner->system.max_alignment_steps == INT_MAX) {
     fprintf(stream,",inf)");

@@ -52,7 +52,11 @@ WFAligner::WFAligner(
     case MemoryMed: this->attributes.memory_mode = wavefront_memory_med; break;
     case MemoryLow: this->attributes.memory_mode = wavefront_memory_low; break;
     case MemoryUltralow: this->attributes.memory_mode = wavefront_memory_ultralow; break;
+    case MemorySingletrack: this->attributes.memory_mode = wavefront_memory_singletrack; break;
     default: this->attributes.memory_mode = wavefront_memory_high; break;
+  }
+  if (memoryModel == MemorySingletrack) {
+    this->attributes.heuristic.strategy = wf_heuristic_none;
   }
   this->attributes.alignment_scope = (alignmentScope==Score) ? compute_score : compute_alignment;
   // this->attributes.system.verbose = 2; // DEBUG
@@ -467,4 +471,3 @@ WFAlignerGapAffine2Pieces::WFAlignerGapAffine2Pieces(
 }
 
 } /* namespace wfa */
-

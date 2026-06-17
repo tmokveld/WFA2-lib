@@ -60,10 +60,11 @@ const uint8_t sam_cigar_lut[256] =
  */
 cigar_t* cigar_new(
     const int max_operations) {
+  const int padding = 8; // Leading padding.
   // Allocate
   cigar_t* const cigar = malloc(sizeof(cigar_t));
   // Allocate alignment-operations buffer
-  cigar->max_operations = max_operations;
+  cigar->max_operations = max_operations + padding;
   cigar->operations = malloc(cigar->max_operations);
   cigar->begin_offset = 0;
   cigar->end_offset = 0;
@@ -72,7 +73,7 @@ cigar_t* cigar_new(
   cigar->end_h = -1;
   // CIGAR
   cigar->cigar_length = 0;
-  cigar->cigar_buffer = calloc(max_operations,sizeof(uint32_t));
+  cigar->cigar_buffer = calloc(max_operations + padding,sizeof(uint32_t));
   // Return
   return cigar;
 }
@@ -593,5 +594,4 @@ void cigar_print_pretty(
   // Free
   free(mem);
 }
-
 

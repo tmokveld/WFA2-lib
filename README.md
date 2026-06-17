@@ -1,4 +1,6 @@
-# WFA2-lib
+# WFA2-lib + Singletrack
+
+This version of WFA2-lib includes uses Singletrack for the traceback. It also includes optimizations that store only a scope of the indel matrices during alignment, rather than the full matrices, for both gap-affine and dual gap-affine alignments. This integration is compatible with global alignments using the library's high memory option (See https://github.com/LorienLV/singletrack/ for details).
 
 ## 1. INTRODUCTION
 
@@ -415,7 +417,9 @@ The WFA2 library allows computing alignments with different spans or shapes. Alt
 
 ### <a name="wfa2.mem"></a> 3.4 Memory modes
 
-The WFA2 library implements various memory modes: `wavefront_memory_high`, `wavefront_memory_med`, `wavefront_memory_low`, and `wavefront_memory_ultralow`. These modes allow regulating the overall memory consumption. The standard WFA algorithm, which stores explicitly all wavefronts in memory, correspond to the mode `wavefront_memory_high`. Memory modes `wavefront_memory_med` and `wavefront_memory_low` progressively reduce memory usage at the expense of slightly larger alignment times. Memory mode `wavefront_memory_ultralow` utilizes the BiWFA algorithm using a minimal memory footprint of `O(s)` and the same `O(ns+s^2)` time complexity as the original WFA. In practice, `wavefront_memory_ultralow` can outperform `wavefront_memory_high` because the latter experiences memory slowdowns when aligning long and noisy sequences.
+The WFA2 library implements various memory modes: `wavefront_memory_high`, `wavefront_memory_med`, `wavefront_memory_low`, `wavefront_memory_ultralow`, and `wavefront_memory_singletrack`. These modes allow regulating the overall memory consumption. The standard WFA algorithm, which stores explicitly all wavefronts in memory, correspond to the mode `wavefront_memory_high`. Memory modes `wavefront_memory_med` and `wavefront_memory_low` progressively reduce memory usage at the expense of slightly larger alignment times. Memory mode `wavefront_memory_ultralow` utilizes the BiWFA algorithm using a minimal memory footprint of `O(s)` and the same `O(ns+s^2)` time complexity as the original WFA. In practice, `wavefront_memory_ultralow` can outperform `wavefront_memory_high` because the latter experiences memory slowdowns when aligning long and noisy sequences.
+
+Memory mode `wavefront_memory_singletrack` enables the Singletrack traceback for full global gap-affine and dual gap-affine alignments. It stores all M wavefronts and reuses the indel wavefronts needed during computation, then reconstructs an optimal CIGAR from the M wavefronts. It is not available for score-only, ends-free, extension, heuristic, non-affine, or BiWFA alignments. Singletrack follows the reference implementation and directly accesses padded sequence buffers; use ASCII or packed2bits inputs. Custom lambda sequence mode is not supported.
 
 Memory modes can be used transparently with other alignment options and generate identical results. Note that this option does not affect the score-only alignment mode, which always uses a minimal memory footprint of `O(s)`).
 
@@ -565,7 +569,7 @@ WFA2's heuristics are classified into the following categories: ['wf-adaptive'](
 - Note that edit and LCS are distance metrics and, thus, the score computed is always positive. However, using weighted distances (e.g., gap-linear and gap-affine) the alignment score is computed using the selected penalties (i.e., the alignment score can be positive or negative). For instance, if WFA2-lib is executed using $M=0$, the final score is expected to be negative.
 
 
-- All WFA2-lib algorithms/variants are stable. That is, for alignments with the same score, all alignment modes always resolve ties (between M, X, I,and D) using the same criteria: M (highest prio) > X > D > I (lowest prio). Only the memory mode `ultralow` (BiWFA) resolves ties differently (although the results are still optimal).
+- All WFA2-lib algorithms/variants are stable. That is, for alignments with the same score, all alignment modes always resolve ties (between M, X, I,and D) using the same criteria: M (highest prio) > X > D > I (lowest prio). Memory modes `ultralow` (BiWFA) and `singletrack` can resolve ties differently (although the results are still optimal).
 
 
 - WFA2lib follows the convention that describes how to transform the (1) Pattern/Query into the (2) Text/Database/Reference used in classic pattern matching papers. However, the SAM CIGAR specification describes the transformation from (2) Reference to (1) Query. If you want CIGAR-compliant alignments, swap the pattern and text sequences argument when calling the WFA2lib's align functions (to convert all the Ds into Is and vice-versa).

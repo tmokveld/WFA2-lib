@@ -141,7 +141,9 @@ void usage() {
       "        [Wavefront parameters]                                          \n"
       "          --wfa-score-only                                              \n"
       "          --wfa-span 'global'|'extension'|'ends-free[,P0,Pf,T0,Tf]'     \n"
-      "          --wfa-memory 'high'|'med'|'low'|'ultralow'                    \n"
+      "          --wfa-memory 'high'|'med'|'low'|'ultralow'|'singletrack'      \n"
+      "            singletrack: full global affine/affine2p, no heuristics;    \n"
+      "                         ASCII/packed2bits inputs only                  \n"
       "          --wfa-heuristic STRATEGY                                      \n"
       "          --wfa-heuristic-parameters  P1,P2[,P3]                        \n"
       "            [STRATEGY='banded-static']                                  \n"
@@ -395,8 +397,10 @@ void parse_arguments(
         parameters.wfa_memory_mode = wavefront_memory_low;
       } else if (strcmp(optarg,"ultralow")==0) {
         parameters.wfa_memory_mode = wavefront_memory_ultralow;
+      } else if (strcmp(optarg,"singletrack")==0) {
+        parameters.wfa_memory_mode = wavefront_memory_singletrack;
       } else {
-        fprintf(stderr,"Option '--wfa-memory' must be in {'high','med','low','ultralow'}\n");
+        fprintf(stderr,"Option '--wfa-memory' must be in {'high','med','low','ultralow','singletrack'}\n");
         exit(1);
       }
       break;

@@ -450,6 +450,90 @@ void wavefront_compute_allocate_output(
   wf_components->mwavefronts[score_mod]->lo = lo;
   wf_components->mwavefronts[score_mod]->hi = hi;
   if (distance_metric == gap_linear) return;
+  if (wf_aligner->memory_mode == wavefront_memory_singletrack) {
+    const int pattern_length = wf_aligner->sequences.pattern_length;
+    const int text_length = wf_aligner->sequences.text_length;
+
+    // We swap I1, D1, I2, D2 wavefronts out of the scope with the new output
+    // I1, D1, I2, D2 wavefronts.
+    // The traceback must be performed using the information in M only.
+    // TODO: This is a temporary solution. Do this well.
+    const int lo_bound = -(pattern_length + 128);
+    const int hi_bound = text_length + 128;
+
+    // Allocate I1-Wavefront
+    if (!wavefront_set->in_mwavefront_open1->null || !wavefront_set->in_i1wavefront_ext->null) {
+      const int score_indel1 = score - 2 * wf_aligner->penalties.gap_extension1;
+
+      if (score_indel1 >= 0 && wf_components->i1wavefronts[score_indel1]) {
+        wavefront_set->out_i1wavefront = wf_components->i1wavefronts[score_indel1];
+        wf_components->i1wavefronts[score_indel1] = NULL;
+      } else {
+        wavefront_set->out_i1wavefront = wavefront_slab_allocate(wavefront_slab,lo_bound,hi_bound);
+      }
+      wf_components->i1wavefronts[score_mod] = wavefront_set->out_i1wavefront;
+      wf_components->i1wavefronts[score_mod]->lo = lo;
+      wf_components->i1wavefronts[score_mod]->hi = hi;
+    } else {
+      wavefront_set->out_i1wavefront = wf_components->wavefront_victim;
+      wf_components->i1wavefronts[score_mod] = NULL;
+    }
+    // Allocate D1-Wavefront
+    if (!wavefront_set->in_mwavefront_open1->null || !wavefront_set->in_d1wavefront_ext->null) {
+      const int score_indel1 = score - 2 * wf_aligner->penalties.gap_extension1;
+
+      if (score_indel1 >= 0 && wf_components->d1wavefronts[score_indel1]) {
+        wavefront_set->out_d1wavefront = wf_components->d1wavefronts[score_indel1];
+        wf_components->d1wavefronts[score_indel1] = NULL;
+      } else {
+        wavefront_set->out_d1wavefront = wavefront_slab_allocate(wavefront_slab,lo_bound,hi_bound);
+      }
+      wf_components->d1wavefronts[score_mod] = wavefront_set->out_d1wavefront;
+      wf_components->d1wavefronts[score_mod]->lo = lo;
+      wf_components->d1wavefronts[score_mod]->hi = hi;
+    } else {
+      wavefront_set->out_d1wavefront = wf_components->wavefront_victim;
+      wf_components->d1wavefronts[score_mod] = NULL;
+    }
+
+    if (distance_metric == gap_affine) return;
+
+    // Allocate I2-Wavefront
+    if (!wavefront_set->in_mwavefront_open2->null || !wavefront_set->in_i2wavefront_ext->null) {
+      const int score_indel2 = score - 2 * wf_aligner->penalties.gap_extension2;
+
+      if (score_indel2 >= 0 && wf_components->i2wavefronts[score_indel2]) {
+        wavefront_set->out_i2wavefront = wf_components->i2wavefronts[score_indel2];
+        wf_components->i2wavefronts[score_indel2] = NULL;
+      } else {
+        wavefront_set->out_i2wavefront = wavefront_slab_allocate(wavefront_slab,lo_bound,hi_bound);
+      }
+      wf_components->i2wavefronts[score_mod] = wavefront_set->out_i2wavefront;
+      wf_components->i2wavefronts[score_mod]->lo = lo;
+      wf_components->i2wavefronts[score_mod]->hi = hi;
+    } else {
+      wavefront_set->out_i2wavefront = wf_components->wavefront_victim;
+      wf_components->i2wavefronts[score_mod] = NULL;
+    }
+    // Allocate D2-Wavefront
+    if (!wavefront_set->in_mwavefront_open2->null || !wavefront_set->in_d2wavefront_ext->null) {
+      const int score_indel2 = score - 2 * wf_aligner->penalties.gap_extension2;
+
+      if (score_indel2 >= 0 && wf_components->d2wavefronts[score_indel2]) {
+        wavefront_set->out_d2wavefront = wf_components->d2wavefronts[score_indel2];
+        wf_components->d2wavefronts[score_indel2] = NULL;
+      } else {
+        wavefront_set->out_d2wavefront = wavefront_slab_allocate(wavefront_slab,lo_bound,hi_bound);
+      }
+      wf_components->d2wavefronts[score_mod] = wavefront_set->out_d2wavefront;
+      wf_components->d2wavefronts[score_mod]->lo = lo;
+      wf_components->d2wavefronts[score_mod]->hi = hi;
+    } else {
+      wavefront_set->out_d2wavefront = wf_components->wavefront_victim;
+      wf_components->d2wavefronts[score_mod] = NULL;
+    }
+    return;
+  }
   // Allocate I1-Wavefront
   if (!wavefront_set->in_mwavefront_open1->null || !wavefront_set->in_i1wavefront_ext->null) {
     wavefront_set->out_i1wavefront = wavefront_slab_allocate(wavefront_slab,effective_lo,effective_hi);
@@ -661,4 +745,3 @@ void wavefront_compute_thread_limits(
   *thread_hi = t_hi;
 }
 #endif
-

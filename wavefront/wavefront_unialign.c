@@ -193,6 +193,10 @@ void wavefront_unialign_terminate(
         if (wf_aligner->penalties.distance_metric <= gap_linear) {
           wavefront_backtrace_linear(wf_aligner,
               score,alignment_end_k,alignment_end_offset);
+        } else if (wf_aligner->memory_mode == wavefront_memory_singletrack) {
+          wavefront_backtrace_affine_m_only(wf_aligner,
+              wf_aligner->component_begin,wf_aligner->component_end,
+              score,alignment_end_k,alignment_end_offset);
         } else {
           wavefront_backtrace_affine(wf_aligner,
               wf_aligner->component_begin,wf_aligner->component_end,
