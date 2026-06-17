@@ -74,12 +74,8 @@ void wavefront_align_presets__checks(
       fprintf(stderr,"[WFA] Singletrack memory mode requires full alignment scope\n");
       exit(1);
     }
-    if (wf_aligner->alignment_form.extension) {
-      fprintf(stderr,"[WFA] Singletrack memory mode does not support extension alignments\n");
-      exit(1);
-    }
     if (form->span != alignment_end2end && form->span != alignment_endsfree) {
-      fprintf(stderr,"[WFA] Singletrack memory mode only supports end-to-end and ends-free alignments\n");
+      fprintf(stderr,"[WFA] Singletrack memory mode only supports end-to-end, ends-free, and extension alignments\n");
       exit(1);
     }
     if (wf_aligner->heuristic.strategy != wf_heuristic_none) {
@@ -180,6 +176,10 @@ int wavefront_align_lambda(
     const int text_length) {
   // Checks
   wavefront_align_presets__checks(wf_aligner,pattern_length,text_length);
+  if (wf_aligner->memory_mode == wavefront_memory_singletrack) {
+    fprintf(stderr,"[WFA] Singletrack memory mode does not support lambda/custom sequence inputs\n");
+    exit(1);
+  }
   wavefront_debug_begin(wf_aligner);
   // Plot
   if (wf_aligner->plot != NULL) wavefront_plot_resize(wf_aligner->plot,pattern_length,text_length);

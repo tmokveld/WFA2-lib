@@ -2,6 +2,7 @@ lib/
 bin/
 build/
 Testing/
+.benchmark/
 
 # Prerequisites
 *.d
@@ -37,8 +38,8 @@ Testing/
 *.app
 
 # Test output files
+tests/wfa.utest.log
 tests/wfa.utest.log.correct
 tests/wfa.utest.log.mem
 tests/wfa.utest.log.time
 tests/*.alg
-

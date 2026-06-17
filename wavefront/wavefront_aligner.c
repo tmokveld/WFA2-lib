@@ -435,13 +435,9 @@ wavefront_aligner_t* wavefront_aligner_new(
       fprintf(stderr,"[WFA] Singletrack memory mode requires full alignment scope\n");
       exit(1);
     }
-    if (attributes->alignment_form.extension) {
-      fprintf(stderr,"[WFA] Singletrack memory mode does not support extension alignments\n");
-      exit(1);
-    }
     if (attributes->alignment_form.span != alignment_end2end &&
         attributes->alignment_form.span != alignment_endsfree) {
-      fprintf(stderr,"[WFA] Singletrack memory mode only supports end-to-end and ends-free alignments\n");
+      fprintf(stderr,"[WFA] Singletrack memory mode only supports end-to-end, ends-free, and extension alignments\n");
       exit(1);
     }
     if (attributes->heuristic.strategy != wf_heuristic_none) {

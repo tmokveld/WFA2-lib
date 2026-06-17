@@ -63,6 +63,7 @@ void benchmark_align_input_clear(
   counter_reset(&(align_input->align_mismatches));
   counter_reset(&(align_input->align_del));
   counter_reset(&(align_input->align_ins));
+  counter_reset(&(align_input->align_memory_bytes));
 }
 /*
  * Display
@@ -177,6 +178,13 @@ void benchmark_print_output(
     }
   }
 }
+void benchmark_record_wfa_memory(
+    align_input_t* const align_input) {
+  if (align_input->wf_aligner == NULL) return;
+  counter_add(
+      &align_input->align_memory_bytes,
+      align_input->wf_aligner->align_status.memory_used);
+}
 /*
  * Stats
  */
@@ -213,4 +221,3 @@ void benchmark_print_stats(
   fprintf(stream,"   => CIGAR.Deletions      ");
   counter_print(stream,&align_input->align_del,&align_input->align_bases,"bases     ",true);
 }
-

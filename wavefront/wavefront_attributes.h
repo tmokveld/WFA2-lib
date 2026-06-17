@@ -106,7 +106,7 @@ typedef enum {
   wavefront_memory_med      = 1, // Succing-memory mode piggyback-based (medium, offloads half-full BT-blocks)
   wavefront_memory_low      = 2, // Succing-memory mode piggyback-based (slow, offloads only full BT-blocks)
   wavefront_memory_ultralow = 3, // Bidirectional WFA
-  wavefront_memory_singletrack = 4, // Singletrack backtrace (affine/affine2p end-to-end or ends-free alignment)
+  wavefront_memory_singletrack = 4, // Singletrack backtrace (affine/affine2p only)
 } wavefront_memory_t;
 
 /*

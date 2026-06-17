@@ -12,6 +12,7 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 INPUT="$SCRIPT_DIR/wfa.utest.seq"
 WORKDIR="$(mktemp -d "${TMPDIR:-/tmp}/wfa.singletrack.XXXXXX")"
 ENDSFREE_INPUT="$WORKDIR/endsfree.seq"
+EXTENSION_INPUT="$WORKDIR/extension.seq"
 
 BIN="${1:-}/align_benchmark"
 if [[ ! -f "$BIN" ]]; then
@@ -32,6 +33,15 @@ cat > "$ENDSFREE_INPUT" <<'EOF'
 <GGGGAAAACCCCGGGG
 >CCCCAAAAGGGG
 <AAAAGGGGTTTT
+EOF
+
+cat > "$EXTENSION_INPUT" <<'EOF'
+>AAAACCCCGGGGTTTT
+<AAAACCCCGGGGAAAA
+>ACGTACGTGGGG
+<ACGTACGTTTTT
+>TTTTAAAACCCC
+<TTTTAAAAGGGG
 EOF
 
 compare_scores() {
@@ -81,6 +91,12 @@ run_case_input "affine.endsfree.negmatch" "$ENDSFREE_INPUT" "gap-affine-wfa" \
     "--wfa-span=ends-free,4,4,4,4" "--affine-penalties=-5,1,2,1"
 run_case_input "affine2p.endsfree.negmatch" "$ENDSFREE_INPUT" "gap-affine2p-wfa" \
     "--wfa-span=ends-free,4,4,4,4" "--affine2p-penalties=-5,1,2,1,5,1"
+run_case_input "affine.extension" "$EXTENSION_INPUT" "gap-affine-wfa" "--wfa-span=extension"
+run_case_input "affine2p.extension" "$EXTENSION_INPUT" "gap-affine2p-wfa" "--wfa-span=extension"
+run_case_input "affine.extension.negmatch" "$EXTENSION_INPUT" "gap-affine-wfa" \
+    "--wfa-span=extension" "--affine-penalties=-5,1,2,1"
+run_case_input "affine2p.extension.negmatch" "$EXTENSION_INPUT" "gap-affine2p-wfa" \
+    "--wfa-span=extension" "--affine2p-penalties=-5,1,2,1,5,1"
 
 expect_reject() {
   local name="$1"
@@ -92,8 +108,8 @@ expect_reject() {
 }
 
 expect_reject "score-only" -a gap-affine-wfa --wfa-memory=singletrack --wfa-score-only
-expect_reject "extension" -a gap-affine-wfa --wfa-memory=singletrack --wfa-span=extension
 expect_reject "edit" -a edit-wfa --wfa-memory=singletrack
+expect_reject "lambda" -a gap-affine-wfa --wfa-memory=singletrack --wfa-lambda
 expect_reject "heuristic" -a gap-affine-wfa --wfa-memory=singletrack \
     --wfa-heuristic=wfa-adaptive --wfa-heuristic-parameters=10,50,1
 

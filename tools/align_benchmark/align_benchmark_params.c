@@ -142,7 +142,7 @@ void usage() {
       "          --wfa-score-only                                              \n"
       "          --wfa-span 'global'|'extension'|'ends-free[,P0,Pf,T0,Tf]'     \n"
       "          --wfa-memory 'high'|'med'|'low'|'ultralow'|'singletrack'      \n"
-      "            singletrack: full global/ends-free affine/affine2p, no heuristics;\n"
+      "            singletrack: full global/ends-free/extension affine/affine2p, no heuristics;\n"
       "                         ASCII/packed2bits inputs only                  \n"
       "          --wfa-heuristic STRATEGY                                      \n"
       "          --wfa-heuristic-parameters  P1,P2[,P3]                        \n"
