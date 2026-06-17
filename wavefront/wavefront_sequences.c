@@ -109,7 +109,8 @@ void wavefront_sequences_init_decode2bits(
   // Parameters
   const char dna_packed2bits_decode[4] = {'A','C','G','T'};
   // Compute dimensions
-  const int num_words = DIV_CEIL(sequence_length,8);
+  const int num_words = sequence_length/4;
+  const int tail_letters = sequence_length%4;
   int buffer_pos = (reverse) ? sequence_length-1 : 0;
   // Decode and copy sequence
   int word_num;
@@ -133,6 +134,15 @@ void wavefront_sequences_init_decode2bits(
       buffer_dst[buffer_pos+2] = letter2;
       buffer_dst[buffer_pos+3] = letter3;
       buffer_pos += 4;
+    }
+  }
+  if (tail_letters > 0) {
+    const uint8_t word = sequence[num_words];
+    int letter_num;
+    for (letter_num=0;letter_num<tail_letters;++letter_num) {
+      const char letter = dna_packed2bits_decode[(word>>(2*letter_num) & 3)];
+      buffer_dst[buffer_pos] = letter;
+      buffer_pos += (reverse) ? -1 : 1;
     }
   }
   // Add end padding

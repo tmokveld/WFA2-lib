@@ -269,6 +269,15 @@ endfunction()
 
 add_wfa_test()
 
+add_executable(wfa_packed2bits_regression
+  tests/wfa_packed2bits_regression.c
+)
+target_link_libraries(wfa_packed2bits_regression wfa2_static m)
+add_test(
+  NAME wfa_packed2bits_regression
+  COMMAND wfa_packed2bits_regression
+)
+
 # ---- Install
 
 # Do not install anything when used with FetchContent
