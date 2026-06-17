@@ -756,6 +756,115 @@ static bool wavefront_backtrace_m_only_try_begin_free(
   wavefront_backtrace_m_only_add_begin_free(cigar,v,h);
   return true;
 }
+static bool wavefront_backtrace_m_only_try_zero_begin_free(
+    wavefront_aligner_t* const wf_aligner,
+    cigar_t* const cigar,
+    const int v,
+    const int h) {
+  const alignment_form_t* const form = &wf_aligner->alignment_form;
+  const wavefront_penalties_t* const penalties = &wf_aligner->penalties;
+  if (form->span != alignment_endsfree || penalties->match != 0) return false;
+  const int k = h - v;
+  if (k >= 0 && k <= form->text_begin_free) {
+    wavefront_backtrace_add_lut_to_cigar(cigar,matches_lut,v);
+    wavefront_backtrace_add_lut_to_cigar(cigar,insertions_lut,k);
+    return true;
+  }
+  if (k < 0 && -k <= form->pattern_begin_free) {
+    wavefront_backtrace_add_lut_to_cigar(cigar,matches_lut,h);
+    wavefront_backtrace_add_lut_to_cigar(cigar,deletions_lut,-k);
+    return true;
+  }
+  return false;
+}
+static bool wavefront_backtrace_m_only_try_indel(
+    wavefront_aligner_t* const wf_aligner,
+    cigar_t* const cigar,
+    const distance_metric_t distance_metric,
+    const int score,
+    const int k,
+    const wf_offset_t offset,
+    const wf_offset_t offset_orig,
+    int* const next_score,
+    int* const next_k,
+    wf_offset_t* const next_offset) {
+  const wavefront_penalties_t* const penalties = &wf_aligner->penalties;
+  int l;
+  for (l=1;;++l) {
+    bool score_in_scope = false;
+    const int k_ins = k - l;
+    const int k_del = k + l;
+    const int indel1 = score - penalties->gap_opening1 -
+                       l * penalties->gap_extension1;
+    const wavefront_t* const mwavefront1 = (indel1 >= 0) ?
+      wf_aligner->wf_components.mwavefronts[indel1] : NULL;
+    if (indel1 >= 0) {
+      score_in_scope = true;
+      if (mwavefront1 != NULL &&
+          mwavefront1->lo <= k_ins &&
+          k_ins <= mwavefront1->hi &&
+          mwavefront1->offsets[k_ins] + l >= offset_orig &&
+          mwavefront1->offsets[k_ins] + l <= offset) {
+        const int nmatches = offset - (mwavefront1->offsets[k_ins] + l);
+        wavefront_backtrace_add_lut_to_cigar(cigar,matches_lut,nmatches);
+        wavefront_backtrace_add_lut_to_cigar(cigar,insertions_lut,l);
+        *next_k = k_ins;
+        *next_offset = mwavefront1->offsets[k_ins];
+        *next_score = indel1;
+        return true;
+      }
+      if (mwavefront1 != NULL &&
+          mwavefront1->lo <= k_del &&
+          k_del <= mwavefront1->hi &&
+          mwavefront1->offsets[k_del] >= offset_orig &&
+          mwavefront1->offsets[k_del] <= offset) {
+        const int nmatches = offset - mwavefront1->offsets[k_del];
+        wavefront_backtrace_add_lut_to_cigar(cigar,matches_lut,nmatches);
+        wavefront_backtrace_add_lut_to_cigar(cigar,deletions_lut,l);
+        *next_k = k_del;
+        *next_offset = mwavefront1->offsets[k_del];
+        *next_score = indel1;
+        return true;
+      }
+    }
+    if (distance_metric == gap_affine_2p) {
+      const int indel2 = score - penalties->gap_opening2 -
+                         l * penalties->gap_extension2;
+      const wavefront_t* const mwavefront2 = (indel2 >= 0) ?
+        wf_aligner->wf_components.mwavefronts[indel2] : NULL;
+      if (indel2 >= 0) {
+        score_in_scope = true;
+        if (mwavefront2 != NULL &&
+            mwavefront2->lo <= k_ins &&
+            k_ins <= mwavefront2->hi &&
+            mwavefront2->offsets[k_ins] + l >= offset_orig &&
+            mwavefront2->offsets[k_ins] + l <= offset) {
+          const int nmatches = offset - (mwavefront2->offsets[k_ins] + l);
+          wavefront_backtrace_add_lut_to_cigar(cigar,matches_lut,nmatches);
+          wavefront_backtrace_add_lut_to_cigar(cigar,insertions_lut,l);
+          *next_k = k_ins;
+          *next_offset = mwavefront2->offsets[k_ins];
+          *next_score = indel2;
+          return true;
+        }
+        if (mwavefront2 != NULL &&
+            mwavefront2->lo <= k_del &&
+            k_del <= mwavefront2->hi &&
+            mwavefront2->offsets[k_del] >= offset_orig &&
+            mwavefront2->offsets[k_del] <= offset) {
+          const int nmatches = offset - mwavefront2->offsets[k_del];
+          wavefront_backtrace_add_lut_to_cigar(cigar,matches_lut,nmatches);
+          wavefront_backtrace_add_lut_to_cigar(cigar,deletions_lut,l);
+          *next_k = k_del;
+          *next_offset = mwavefront2->offsets[k_del];
+          *next_score = indel2;
+          return true;
+        }
+      }
+    }
+    if (!score_in_scope) return false;
+  }
+}
 
 /**
  * Retrieve the cigar of the alignment for gap-affine and dual gap-affine
@@ -859,6 +968,15 @@ void wavefront_backtrace_affine_m_only(
         k = 0;
         offset = 0;
         break;
+      }
+
+      if (wf_aligner->alignment_form.extension &&
+          wavefront_backtrace_m_only_try_indel(
+              wf_aligner,cigar,distance_metric,
+              score,k,offset,offset_orig,
+              &score,&k,&offset)) {
+        in_mmatrix = true;
+        continue;
       }
 
       // If we come from a mismatch, then the backwards extend is correct.
@@ -1019,17 +1137,22 @@ void wavefront_backtrace_affine_m_only(
   v = WAVEFRONT_V(k, offset);
   h = WAVEFRONT_H(k, offset);
   if (in_mmatrix) {
-    const int num_matches = MIN(v,h);
-    wavefront_backtrace_add_lut_to_cigar(cigar, matches_lut, num_matches);
-    v -= num_matches;
-    h -= num_matches;
-    while (v > 0) {
-      cigar->operations[(cigar->begin_offset)--] = 'D';
-      --v;
-    }
-    while (h > 0) {
-      cigar->operations[(cigar->begin_offset)--] = 'I';
-      --h;
+    if (wavefront_backtrace_m_only_try_zero_begin_free(wf_aligner,cigar,v,h)) {
+      v = 0;
+      h = 0;
+    } else {
+      const int num_matches = MIN(v,h);
+      wavefront_backtrace_add_lut_to_cigar(cigar, matches_lut, num_matches);
+      v -= num_matches;
+      h -= num_matches;
+      while (v > 0) {
+        cigar->operations[(cigar->begin_offset)--] = 'D';
+        --v;
+      }
+      while (h > 0) {
+        cigar->operations[(cigar->begin_offset)--] = 'I';
+        --h;
+      }
     }
   }
 

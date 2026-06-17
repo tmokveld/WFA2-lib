@@ -98,6 +98,8 @@ run_case_input "affine.extension.negmatch" "$EXTENSION_INPUT" "gap-affine-wfa" \
 run_case_input "affine2p.extension.negmatch" "$EXTENSION_INPUT" "gap-affine2p-wfa" \
     "--wfa-span=extension" "--affine2p-penalties=-5,1,2,1,5,1"
 
+"$SCRIPT_DIR/wfa.singletrack.proof.py" "$BIN"
+
 expect_reject() {
   local name="$1"
   shift

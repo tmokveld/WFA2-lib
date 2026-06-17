@@ -3,6 +3,7 @@ bin/
 build/
 Testing/
 .benchmark/
+__pycache__/
 
 # Prerequisites
 *.d
