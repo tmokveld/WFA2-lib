@@ -191,6 +191,8 @@ void wavefront_sequences_init_lambda(
   // Set sequences' length
   wf_sequences->pattern = NULL;
   wf_sequences->text = NULL;
+  wf_sequences->pattern_buffer_length = pattern_length;
+  wf_sequences->text_buffer_length = text_length;
   wf_sequences->pattern_begin = 0;
   wf_sequences->pattern_length = pattern_length;
   wf_sequences->text_begin = 0;
@@ -317,4 +319,3 @@ void wavefront_sequences_set_bounds(
   wf_sequences->text_begin = text_begin;
   wf_sequences->text_length = text_end - text_begin;
 }
-
