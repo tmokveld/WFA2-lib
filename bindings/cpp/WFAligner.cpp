@@ -55,9 +55,6 @@ WFAligner::WFAligner(
     case MemorySingletrack: this->attributes.memory_mode = wavefront_memory_singletrack; break;
     default: this->attributes.memory_mode = wavefront_memory_high; break;
   }
-  if (memoryModel == MemorySingletrack) {
-    this->attributes.heuristic.strategy = wf_heuristic_none;
-  }
   this->attributes.alignment_scope = (alignmentScope==Score) ? compute_score : compute_alignment;
   // this->attributes.system.verbose = 2; // DEBUG
   // this->attributes.plot.enabled = true; // DEBUG

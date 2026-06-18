@@ -142,8 +142,8 @@ void usage() {
       "          --wfa-score-only                                              \n"
       "          --wfa-span 'global'|'extension'|'ends-free[,P0,Pf,T0,Tf]'     \n"
       "          --wfa-memory 'high'|'med'|'low'|'ultralow'|'singletrack'      \n"
-      "            singletrack: full global/ends-free/extension affine/affine2p, no heuristics;\n"
-      "                         ASCII/packed2bits inputs only                  \n"
+      "            singletrack: full global/ends-free/extension affine/affine2p;\n"
+      "                         supports non-banded heuristics; ASCII/packed2bits inputs only\n"
       "          --wfa-heuristic STRATEGY                                      \n"
       "          --wfa-heuristic-parameters  P1,P2[,P3]                        \n"
       "            [STRATEGY='banded-static']                                  \n"
@@ -154,6 +154,10 @@ void usage() {
       "              P2 = maximum-diagonal-band (e.g., +100)                   \n"
       "              P3 = steps-between-cutoffs                                \n"
       "            [STRATEGY='wfa-adaptive']                                   \n"
+      "              P1 = minimum-wavefront-length                             \n"
+      "              P2 = maximum-difference-distance                          \n"
+      "              P3 = steps-between-cutoffs                                \n"
+      "            [STRATEGY='wfmash']                                         \n"
       "              P1 = minimum-wavefront-length                             \n"
       "              P2 = maximum-difference-distance                          \n"
       "              P3 = steps-between-cutoffs                                \n"
@@ -404,7 +408,7 @@ void parse_arguments(
         exit(1);
       }
       break;
-    case 1003: // --wfa-heuristic in {'none'|'banded-static'|'banded-adaptive'|'wfa-adaptive'|'xdrop'|'zdrop'}
+    case 1003: // --wfa-heuristic in {'none'|'banded-static'|'banded-adaptive'|'wfa-adaptive'|'wfmash'|'xdrop'|'zdrop'}
       if (strcmp(optarg,"none")==0) {
         parameters.wfa_heuristic = wf_heuristic_none;
       } else if (strcmp(optarg,"banded-static")==0 || strcmp(optarg,"banded")==0) {
@@ -413,12 +417,14 @@ void parse_arguments(
         parameters.wfa_heuristic = wf_heuristic_banded_adaptive;
       } else if (strcmp(optarg,"wfa-adaptive")==0) {
         parameters.wfa_heuristic = wf_heuristic_wfadaptive;
+      } else if (strcmp(optarg,"wfmash")==0) {
+        parameters.wfa_heuristic = wf_heuristic_wfmash;
       } else if (strcmp(optarg,"xdrop")==0) {
         parameters.wfa_heuristic = wf_heuristic_xdrop;
       } else if (strcmp(optarg,"zdrop")==0) {
         parameters.wfa_heuristic = wf_heuristic_zdrop;
       } else {
-        fprintf(stderr,"Option '--wf-heuristic' must be in {'none'|'banded-static'|'banded-adaptive'|'wfa-adaptive'|'xdrop'|'zdrop'}\n");
+        fprintf(stderr,"Option '--wfa-heuristic' must be in {'none'|'banded-static'|'banded-adaptive'|'wfa-adaptive'|'wfmash'|'xdrop'|'zdrop'}\n");
         exit(1);
       }
       break;
@@ -432,7 +438,6 @@ void parse_arguments(
       const int p2 = atoi(sentinel);
       parameters.wfa_heuristic_p2 = p2;
       sentinel = strtok(NULL,",");
-      CHECK_SENTINEL(sentinel, "Invalid --wfa-heuristic-parameters\n");
       if (sentinel != NULL) {
         const int p3 = atoi(sentinel);
         parameters.wfa_heuristic_p3 = p3;
@@ -589,6 +594,7 @@ void parse_arguments(
       break;
     case wf_heuristic_banded_adaptive:
     case wf_heuristic_wfadaptive:
+    case wf_heuristic_wfmash:
       if (parameters.wfa_heuristic_p1 == -1 ||
           parameters.wfa_heuristic_p2 == -1 ||
           parameters.wfa_heuristic_p3 == -1) {

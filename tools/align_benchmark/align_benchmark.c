@@ -182,6 +182,12 @@ wavefront_aligner_t* align_input_configure_wavefront(
       attributes.heuristic.max_distance_threshold = parameters.wfa_heuristic_p2;
       attributes.heuristic.steps_between_cutoffs = parameters.wfa_heuristic_p3;
       break;
+    case wf_heuristic_wfmash:
+      attributes.heuristic.strategy = wf_heuristic_wfmash;
+      attributes.heuristic.min_wavefront_length = parameters.wfa_heuristic_p1;
+      attributes.heuristic.max_distance_threshold = parameters.wfa_heuristic_p2;
+      attributes.heuristic.steps_between_cutoffs = parameters.wfa_heuristic_p3;
+      break;
     case wf_heuristic_xdrop:
       attributes.heuristic.strategy = wf_heuristic_xdrop;
       attributes.heuristic.xdrop = parameters.wfa_heuristic_p1;

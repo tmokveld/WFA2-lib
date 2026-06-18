@@ -63,6 +63,27 @@ static const uint64_t mismatches_lut = 0x5858585858585858ul; // Mismatches LUT =
 static const uint64_t insertions_lut = 0x4949494949494949ul; // Insertions LUT = "IIIIIIII"
 static const uint64_t deletions_lut = 0x4444444444444444ul; // Deletions LUT = "DDDDDDDD"
 
+static bool wavefront_backtrace_m_offset(
+    wavefront_aligner_t* const wf_aligner,
+    const int score,
+    const int k,
+    wf_offset_t* const offset) {
+  if (score < 0) return false;
+  wavefront_components_t* const wf_components = &wf_aligner->wf_components;
+  if (score >= wf_components->num_wavefronts) return false;
+  wavefront_t* const mwavefront = wf_components->mwavefronts[score];
+  if (mwavefront == NULL) return false;
+  // Use the historical initialized envelope; active bounds can be heuristic-pruned.
+  if (k < mwavefront->wf_elements_init_min ||
+      mwavefront->wf_elements_init_max < k) {
+    return false;
+  }
+  const wf_offset_t m_offset = mwavefront->offsets[k];
+  if (m_offset == WAVEFRONT_OFFSET_NULL) return false;
+  *offset = m_offset;
+  return true;
+}
+
 /**
  * Add @p num operations of type @p op to the CIGAR. @p lut_op represents the
  * 64-bit representation of the operation (8 times the same operation). This is
@@ -130,15 +151,10 @@ int64_t wavefront_backtrace_misms(
     wavefront_aligner_t* const wf_aligner,
     const int score,
     const int k) {
-  if (score < 0) return WAVEFRONT_OFFSET_NULL;
-  wavefront_t* const mwavefront = wf_aligner->wf_components.mwavefronts[score];
-  if (mwavefront != NULL &&
-      mwavefront->wf_elements_init_min <= k &&
-      k <= mwavefront->wf_elements_init_max) {
-    return BACKTRACE_PIGGYBACK_SET(mwavefront->offsets[k]+1,backtrace_M);
-  } else {
-    return WAVEFRONT_OFFSET_NULL;
-  }
+  wf_offset_t offset;
+  return wavefront_backtrace_m_offset(wf_aligner,score,k,&offset) ?
+      BACKTRACE_PIGGYBACK_SET(offset+1,backtrace_M) :
+      WAVEFRONT_OFFSET_NULL;
 }
 void wavefront_backtrace_matches(
     wavefront_aligner_t* const wf_aligner,
@@ -155,29 +171,19 @@ int64_t wavefront_backtrace_del1_open(
     wavefront_aligner_t* const wf_aligner,
     const int score,
     const int k) {
-  if (score < 0) return WAVEFRONT_OFFSET_NULL;
-  wavefront_t* const mwavefront = wf_aligner->wf_components.mwavefronts[score];
-  if (mwavefront != NULL &&
-      mwavefront->wf_elements_init_min <= k+1 &&
-      k+1 <= mwavefront->wf_elements_init_max) {
-    return BACKTRACE_PIGGYBACK_SET(mwavefront->offsets[k+1],backtrace_D1_open);
-  } else {
-    return WAVEFRONT_OFFSET_NULL;
-  }
+  wf_offset_t offset;
+  return wavefront_backtrace_m_offset(wf_aligner,score,k+1,&offset) ?
+      BACKTRACE_PIGGYBACK_SET(offset,backtrace_D1_open) :
+      WAVEFRONT_OFFSET_NULL;
 }
 int64_t wavefront_backtrace_del2_open(
     wavefront_aligner_t* const wf_aligner,
     const int score,
     const int k) {
-  if (score < 0) return WAVEFRONT_OFFSET_NULL;
-  wavefront_t* const mwavefront = wf_aligner->wf_components.mwavefronts[score];
-  if (mwavefront != NULL &&
-      mwavefront->wf_elements_init_min <= k+1 &&
-      k+1 <= mwavefront->wf_elements_init_max) {
-    return BACKTRACE_PIGGYBACK_SET(mwavefront->offsets[k+1],backtrace_D2_open);
-  } else {
-    return WAVEFRONT_OFFSET_NULL;
-  }
+  wf_offset_t offset;
+  return wavefront_backtrace_m_offset(wf_aligner,score,k+1,&offset) ?
+      BACKTRACE_PIGGYBACK_SET(offset,backtrace_D2_open) :
+      WAVEFRONT_OFFSET_NULL;
 }
 int64_t wavefront_backtrace_del1_ext(
     wavefront_aligner_t* const wf_aligner,
@@ -214,29 +220,19 @@ int64_t wavefront_backtrace_ins1_open(
     wavefront_aligner_t* const wf_aligner,
     const int score,
     const int k) {
-  if (score < 0) return WAVEFRONT_OFFSET_NULL;
-  wavefront_t* const mwavefront = wf_aligner->wf_components.mwavefronts[score];
-  if (mwavefront != NULL &&
-      mwavefront->wf_elements_init_min <= k-1 &&
-      k-1 <= mwavefront->wf_elements_init_max) {
-    return BACKTRACE_PIGGYBACK_SET(mwavefront->offsets[k-1]+1,backtrace_I1_open);
-  } else {
-    return WAVEFRONT_OFFSET_NULL;
-  }
+  wf_offset_t offset;
+  return wavefront_backtrace_m_offset(wf_aligner,score,k-1,&offset) ?
+      BACKTRACE_PIGGYBACK_SET(offset+1,backtrace_I1_open) :
+      WAVEFRONT_OFFSET_NULL;
 }
 int64_t wavefront_backtrace_ins2_open(
     wavefront_aligner_t* const wf_aligner,
     const int score,
     const int k) {
-  if (score < 0) return WAVEFRONT_OFFSET_NULL;
-  wavefront_t* const mwavefront = wf_aligner->wf_components.mwavefronts[score];
-  if (mwavefront != NULL &&
-      mwavefront->wf_elements_init_min <= k-1 &&
-      k-1 <= mwavefront->wf_elements_init_max) {
-    return BACKTRACE_PIGGYBACK_SET(mwavefront->offsets[k-1]+1,backtrace_I2_open);
-  } else {
-    return WAVEFRONT_OFFSET_NULL;
-  }
+  wf_offset_t offset;
+  return wavefront_backtrace_m_offset(wf_aligner,score,k-1,&offset) ?
+      BACKTRACE_PIGGYBACK_SET(offset+1,backtrace_I2_open) :
+      WAVEFRONT_OFFSET_NULL;
 }
 int64_t wavefront_backtrace_ins1_ext(
     wavefront_aligner_t* const wf_aligner,
@@ -796,33 +792,28 @@ static bool wavefront_backtrace_m_only_try_indel(
     const int k_del = k + l;
     const int indel1 = score - penalties->gap_opening1 -
                        l * penalties->gap_extension1;
-    const wavefront_t* const mwavefront1 = (indel1 >= 0) ?
-      wf_aligner->wf_components.mwavefronts[indel1] : NULL;
     if (indel1 >= 0) {
       score_in_scope = true;
-      if (mwavefront1 != NULL &&
-          mwavefront1->lo <= k_ins &&
-          k_ins <= mwavefront1->hi &&
-          mwavefront1->offsets[k_ins] + l >= offset_orig &&
-          mwavefront1->offsets[k_ins] + l <= offset) {
-        const int nmatches = offset - (mwavefront1->offsets[k_ins] + l);
+      wf_offset_t m_offset;
+      if (wavefront_backtrace_m_offset(wf_aligner,indel1,k_ins,&m_offset) &&
+          m_offset + l >= offset_orig &&
+          m_offset + l <= offset) {
+        const int nmatches = offset - (m_offset + l);
         wavefront_backtrace_add_lut_to_cigar(cigar,matches_lut,nmatches);
         wavefront_backtrace_add_lut_to_cigar(cigar,insertions_lut,l);
         *next_k = k_ins;
-        *next_offset = mwavefront1->offsets[k_ins];
+        *next_offset = m_offset;
         *next_score = indel1;
         return true;
       }
-      if (mwavefront1 != NULL &&
-          mwavefront1->lo <= k_del &&
-          k_del <= mwavefront1->hi &&
-          mwavefront1->offsets[k_del] >= offset_orig &&
-          mwavefront1->offsets[k_del] <= offset) {
-        const int nmatches = offset - mwavefront1->offsets[k_del];
+      if (wavefront_backtrace_m_offset(wf_aligner,indel1,k_del,&m_offset) &&
+          m_offset >= offset_orig &&
+          m_offset <= offset) {
+        const int nmatches = offset - m_offset;
         wavefront_backtrace_add_lut_to_cigar(cigar,matches_lut,nmatches);
         wavefront_backtrace_add_lut_to_cigar(cigar,deletions_lut,l);
         *next_k = k_del;
-        *next_offset = mwavefront1->offsets[k_del];
+        *next_offset = m_offset;
         *next_score = indel1;
         return true;
       }
@@ -830,33 +821,28 @@ static bool wavefront_backtrace_m_only_try_indel(
     if (distance_metric == gap_affine_2p) {
       const int indel2 = score - penalties->gap_opening2 -
                          l * penalties->gap_extension2;
-      const wavefront_t* const mwavefront2 = (indel2 >= 0) ?
-        wf_aligner->wf_components.mwavefronts[indel2] : NULL;
       if (indel2 >= 0) {
         score_in_scope = true;
-        if (mwavefront2 != NULL &&
-            mwavefront2->lo <= k_ins &&
-            k_ins <= mwavefront2->hi &&
-            mwavefront2->offsets[k_ins] + l >= offset_orig &&
-            mwavefront2->offsets[k_ins] + l <= offset) {
-          const int nmatches = offset - (mwavefront2->offsets[k_ins] + l);
+        wf_offset_t m_offset;
+        if (wavefront_backtrace_m_offset(wf_aligner,indel2,k_ins,&m_offset) &&
+            m_offset + l >= offset_orig &&
+            m_offset + l <= offset) {
+          const int nmatches = offset - (m_offset + l);
           wavefront_backtrace_add_lut_to_cigar(cigar,matches_lut,nmatches);
           wavefront_backtrace_add_lut_to_cigar(cigar,insertions_lut,l);
           *next_k = k_ins;
-          *next_offset = mwavefront2->offsets[k_ins];
+          *next_offset = m_offset;
           *next_score = indel2;
           return true;
         }
-        if (mwavefront2 != NULL &&
-            mwavefront2->lo <= k_del &&
-            k_del <= mwavefront2->hi &&
-            mwavefront2->offsets[k_del] >= offset_orig &&
-            mwavefront2->offsets[k_del] <= offset) {
-          const int nmatches = offset - mwavefront2->offsets[k_del];
+        if (wavefront_backtrace_m_offset(wf_aligner,indel2,k_del,&m_offset) &&
+            m_offset >= offset_orig &&
+            m_offset <= offset) {
+          const int nmatches = offset - m_offset;
           wavefront_backtrace_add_lut_to_cigar(cigar,matches_lut,nmatches);
           wavefront_backtrace_add_lut_to_cigar(cigar,deletions_lut,l);
           *next_k = k_del;
-          *next_offset = mwavefront2->offsets[k_del];
+          *next_offset = m_offset;
           *next_score = indel2;
           return true;
         }
@@ -952,9 +938,6 @@ void wavefront_backtrace_affine_m_only(
           wavefront_backtrace_m_only_count_backward_matches(wf_aligner,v,h);
 
       const int mismatch = score - penalties->mismatch;
-      const wavefront_t* const mwavefront = (mismatch >= 0) ?
-        wf_aligner->wf_components.mwavefronts[mismatch]
-        : NULL;
 
       offset_orig = offset - nmatches;
 
@@ -980,10 +963,9 @@ void wavefront_backtrace_affine_m_only(
       }
 
       // If we come from a mismatch, then the backwards extend is correct.
-      if (mwavefront != NULL &&
-          mwavefront->lo <= k &&
-          k <= mwavefront->hi &&
-          mwavefront->offsets[k] + 1 == offset_orig) {
+      wf_offset_t m_offset;
+      if (wavefront_backtrace_m_offset(wf_aligner,mismatch,k,&m_offset) &&
+          m_offset + 1 == offset_orig) {
 
         offset = offset_orig - 1;
 
@@ -1025,23 +1007,20 @@ void wavefront_backtrace_affine_m_only(
 
       const int indel1 = score - penalties->gap_opening1 -
                          l * penalties->gap_extension1;
-      const wavefront_t* const mwavefront1 = (indel1 >= 0) ?
-        wf_aligner->wf_components.mwavefronts[indel1] : NULL;
 
       // I1 path.
-      if (mwavefront1 != NULL &&
-          mwavefront1->lo <= k_ins &&
-          k_ins <= mwavefront1->hi &&
-          mwavefront1->offsets[k_ins] + l >= offset_orig &&
-          mwavefront1->offsets[k_ins] + l <= offset) {
+      wf_offset_t m_offset;
+      if (wavefront_backtrace_m_offset(wf_aligner,indel1,k_ins,&m_offset) &&
+          m_offset + l >= offset_orig &&
+          m_offset + l <= offset) {
 
-        const int nmatches = offset - (mwavefront1->offsets[k_ins] + l);
+        const int nmatches = offset - (m_offset + l);
 
         wavefront_backtrace_add_lut_to_cigar(cigar, matches_lut, nmatches);
         wavefront_backtrace_add_lut_to_cigar(cigar, insertions_lut, l);
 
         k = k_ins;
-        offset = mwavefront1->offsets[k_ins];
+        offset = m_offset;
         score = indel1;
 
         in_mmatrix = true;
@@ -1050,19 +1029,17 @@ void wavefront_backtrace_affine_m_only(
       }
 
       // D1 path.
-      if (mwavefront1 != NULL &&
-          mwavefront1->lo <= k_del &&
-          k_del <= mwavefront1->hi &&
-          mwavefront1->offsets[k_del] >= offset_orig &&
-          mwavefront1->offsets[k_del] <= offset) {
+      if (wavefront_backtrace_m_offset(wf_aligner,indel1,k_del,&m_offset) &&
+          m_offset >= offset_orig &&
+          m_offset <= offset) {
 
-        const int nmatches = offset - mwavefront1->offsets[k_del];
+        const int nmatches = offset - m_offset;
 
         wavefront_backtrace_add_lut_to_cigar(cigar, matches_lut, nmatches);
         wavefront_backtrace_add_lut_to_cigar(cigar, deletions_lut, l);
 
         k = k_del;
-        offset = mwavefront1->offsets[k_del];
+        offset = m_offset;
         score = indel1;
 
         in_mmatrix = true;
@@ -1071,28 +1048,26 @@ void wavefront_backtrace_affine_m_only(
       }
 
       if (distance_metric != gap_affine_2p) {
+        if (indel1 < 0) break;
         continue;
       }
 
       const int indel2 = score - penalties->gap_opening2 -
                          l * penalties->gap_extension2;
-      const wavefront_t* const mwavefront2 = (indel2 >= 0) ?
-        wf_aligner->wf_components.mwavefronts[indel2] : NULL;
+      if (indel1 < 0 && indel2 < 0) break;
 
       // I2 path.
-      if (mwavefront2 != NULL &&
-          mwavefront2->lo <= k_ins &&
-          k_ins <= mwavefront2->hi &&
-          mwavefront2->offsets[k_ins] + l >= offset_orig &&
-          mwavefront2->offsets[k_ins] + l <= offset) {
+      if (wavefront_backtrace_m_offset(wf_aligner,indel2,k_ins,&m_offset) &&
+          m_offset + l >= offset_orig &&
+          m_offset + l <= offset) {
 
-        const int nmatches = offset - (mwavefront2->offsets[k_ins] + l);
+        const int nmatches = offset - (m_offset + l);
 
         wavefront_backtrace_add_lut_to_cigar(cigar, matches_lut, nmatches);
         wavefront_backtrace_add_lut_to_cigar(cigar, insertions_lut, l);
 
         k = k_ins;
-        offset = mwavefront2->offsets[k_ins];
+        offset = m_offset;
         score = indel2;
 
         in_mmatrix = true;
@@ -1101,19 +1076,17 @@ void wavefront_backtrace_affine_m_only(
       }
 
       // D2 path.
-      if (mwavefront2 != NULL &&
-          mwavefront2->lo <= k_del &&
-          k_del <= mwavefront2->hi &&
-          mwavefront2->offsets[k_del] >= offset_orig &&
-          mwavefront2->offsets[k_del] <= offset) {
+      if (wavefront_backtrace_m_offset(wf_aligner,indel2,k_del,&m_offset) &&
+          m_offset >= offset_orig &&
+          m_offset <= offset) {
 
-        const int nmatches = offset - mwavefront2->offsets[k_del];
+        const int nmatches = offset - m_offset;
 
         wavefront_backtrace_add_lut_to_cigar(cigar, matches_lut, nmatches);
         wavefront_backtrace_add_lut_to_cigar(cigar, deletions_lut, l);
 
         k = k_del;
-        offset = mwavefront2->offsets[k_del];
+        offset = m_offset;
         score = indel2;
 
         in_mmatrix = true;

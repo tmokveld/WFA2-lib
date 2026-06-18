@@ -440,8 +440,9 @@ wavefront_aligner_t* wavefront_aligner_new(
       fprintf(stderr,"[WFA] Singletrack memory mode only supports end-to-end, ends-free, and extension alignments\n");
       exit(1);
     }
-    if (attributes->heuristic.strategy != wf_heuristic_none) {
-      fprintf(stderr,"[WFA] Singletrack memory mode does not support WFA heuristics\n");
+    if (attributes->heuristic.strategy & (
+        wf_heuristic_banded_static|wf_heuristic_banded_adaptive)) {
+      fprintf(stderr,"[WFA] Singletrack memory mode does not support banded WFA heuristics\n");
       exit(1);
     }
   }
