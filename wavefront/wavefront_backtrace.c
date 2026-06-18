@@ -851,6 +851,37 @@ static bool wavefront_backtrace_m_only_try_indel(
   }
 }
 
+static void wavefront_backtrace_m_only_free_temp(
+    wavefront_aligner_t* const wf_aligner,
+    wavefront_t** const wavefront_slot) {
+  if (*wavefront_slot == NULL) return;
+  wavefront_slab_free(wf_aligner->wavefront_slab,*wavefront_slot);
+  *wavefront_slot = NULL;
+}
+
+static void wavefront_backtrace_m_only_free_temps(
+    wavefront_aligner_t* const wf_aligner,
+    const distance_metric_t distance_metric,
+    const int alignment_score) {
+  wavefront_components_t* const wf_components = &wf_aligner->wf_components;
+  int i;
+  for (i=0;i<=alignment_score;++i) {
+    if (distance_metric == gap_affine ||
+        distance_metric == gap_affine_2p) {
+      wavefront_backtrace_m_only_free_temp(
+          wf_aligner,&wf_components->i1wavefronts[i]);
+      wavefront_backtrace_m_only_free_temp(
+          wf_aligner,&wf_components->d1wavefronts[i]);
+    }
+    if (distance_metric == gap_affine_2p) {
+      wavefront_backtrace_m_only_free_temp(
+          wf_aligner,&wf_components->i2wavefronts[i]);
+      wavefront_backtrace_m_only_free_temp(
+          wf_aligner,&wf_components->d2wavefronts[i]);
+    }
+  }
+}
+
 /**
  * Retrieve the cigar of the alignment for gap-affine and dual gap-affine
  * using exclusively the information in the M matrix (M wavefronts). This is
@@ -1135,34 +1166,9 @@ void wavefront_backtrace_affine_m_only(
     exit(-1);
   }
 
-  // Dirty way of freeing the slabs used by I1, I2, D1 and D2.
-  // TODO: This should be done in a better way.
-  for (int i = 0; i <= alignment_score; ++i) {
-    if (distance_metric == gap_affine) {
-      if (wf_aligner->wf_components.i1wavefronts[i]) {
-        wf_aligner->wavefront_slab->memory_used -= wavefront_get_size(wf_aligner->wf_components.i1wavefronts[i]);
-        wavefront_free(wf_aligner->wf_components.i1wavefronts[i],wf_aligner->wavefront_slab->mm_allocator);
-        wf_aligner->wf_components.i1wavefronts[i]->status = wavefront_status_deallocated;
-      }
-      if (wf_aligner->wf_components.d1wavefronts[i]) {
-        wf_aligner->wavefront_slab->memory_used -= wavefront_get_size(wf_aligner->wf_components.d1wavefronts[i]);
-        wavefront_free(wf_aligner->wf_components.d1wavefronts[i],wf_aligner->wavefront_slab->mm_allocator);
-        wf_aligner->wf_components.d1wavefronts[i]->status = wavefront_status_deallocated;
-      }
-    }
-    if (distance_metric == gap_affine_2p) {
-      if (wf_aligner->wf_components.i2wavefronts[i]) {
-        wf_aligner->wavefront_slab->memory_used -= wavefront_get_size(wf_aligner->wf_components.i2wavefronts[i]);
-        wavefront_free(wf_aligner->wf_components.i2wavefronts[i],wf_aligner->wavefront_slab->mm_allocator);
-        wf_aligner->wf_components.i2wavefronts[i]->status = wavefront_status_deallocated;
-      }
-      if (wf_aligner->wf_components.d2wavefronts[i]) {
-        wf_aligner->wavefront_slab->memory_used -= wavefront_get_size(wf_aligner->wf_components.d2wavefronts[i]);
-        wavefront_free(wf_aligner->wf_components.d2wavefronts[i],wf_aligner->wavefront_slab->mm_allocator);
-        wf_aligner->wf_components.d2wavefronts[i]->status = wavefront_status_deallocated;
-      }
-    }
-  }
+  // Release temporary I/D wavefronts. The traceback above uses M only.
+  wavefront_backtrace_m_only_free_temps(
+      wf_aligner,distance_metric,alignment_score);
 
   // Set CIGAR
   ++(cigar->begin_offset);
