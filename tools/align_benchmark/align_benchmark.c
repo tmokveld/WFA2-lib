@@ -182,6 +182,12 @@ wavefront_aligner_t* align_input_configure_wavefront(
       attributes.heuristic.max_distance_threshold = parameters.wfa_heuristic_p2;
       attributes.heuristic.steps_between_cutoffs = parameters.wfa_heuristic_p3;
       break;
+    case wf_heuristic_wfmash:
+      attributes.heuristic.strategy = wf_heuristic_wfmash;
+      attributes.heuristic.min_wavefront_length = parameters.wfa_heuristic_p1;
+      attributes.heuristic.max_distance_threshold = parameters.wfa_heuristic_p2;
+      attributes.heuristic.steps_between_cutoffs = parameters.wfa_heuristic_p3;
+      break;
     case wf_heuristic_xdrop:
       attributes.heuristic.strategy = wf_heuristic_xdrop;
       attributes.heuristic.xdrop = parameters.wfa_heuristic_p1;
@@ -346,6 +352,34 @@ void align_benchmark_print_progress(
   const float rate_alg = (float)seqs_processed/(float)TIMER_CONVERT_NS_TO_S(time_elapsed_alg);
   fprintf(stderr,"...processed %d reads (alignment = %2.3f seq/s)\n",seqs_processed,rate_alg);
 }
+double align_benchmark_bytes_to_mb(
+    const double bytes) {
+  return (double)bytes/(1024.0*1024.0);
+}
+void align_benchmark_print_memory_results(
+    align_input_t* const align_input) {
+  // Aggregate WFA memory across one or more worker inputs.
+  uint64_t total = 0;
+  uint64_t samples = 0;
+  uint64_t min = UINT64_MAX;
+  uint64_t max = 0;
+  for (int i=0;i<parameters.num_threads;++i) {
+    profiler_counter_t* const memory = &align_input[i].align_memory_bytes;
+    const uint64_t memory_samples = counter_get_num_samples(memory);
+    if (memory_samples == 0) continue;
+    total += counter_get_total(memory);
+    samples += memory_samples;
+    min = MIN(min,counter_get_min(memory));
+    max = MAX(max,counter_get_max(memory));
+  }
+  if (samples == 0) return;
+  fprintf(stderr,"  => Memory.Alignment.Mean.MB %8.3f\n",
+      align_benchmark_bytes_to_mb((double)total/(double)samples));
+  fprintf(stderr,"  => Memory.Alignment.Min.MB  %8.3f\n",
+      align_benchmark_bytes_to_mb(min));
+  fprintf(stderr,"  => Memory.Alignment.Max.MB  %8.3f\n",
+      align_benchmark_bytes_to_mb(max));
+}
 void align_benchmark_print_results(
     align_input_t* const align_input,
     const int seqs_processed,
@@ -364,6 +398,7 @@ void align_benchmark_print_results(
       timer_print(stderr,&align_input[i].timer,&parameters.timer_global);
     }
   }
+  align_benchmark_print_memory_results(align_input);
   // Print Stats
   const bool checks_enabled =
       parameters.check_display || parameters.check_correct ||

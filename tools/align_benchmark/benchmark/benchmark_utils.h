@@ -92,6 +92,7 @@ typedef struct {
   profiler_counter_t align_mismatches;
   profiler_counter_t align_del;
   profiler_counter_t align_ins;
+  profiler_counter_t align_memory_bytes;
   // DEBUG
   int debug_flags;
   linear_penalties_t* check_linear_penalties;
@@ -122,6 +123,8 @@ void benchmark_print_output(
     const distance_metric_t distance_metric,
     const bool score_only,
     cigar_t* const cigar);
+void benchmark_record_wfa_memory(
+    align_input_t* const align_input);
 
 /*
  * Stats

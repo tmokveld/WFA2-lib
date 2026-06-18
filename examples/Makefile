@@ -9,7 +9,10 @@ FOLDER_BIN=bin
 # Rules
 ###############################################################################
 LIB_WFA=$(FOLDER_LIB)/libwfa.a
-LIBS=-fopenmp -lm
+LIBS=-lm
+ifeq ($(BUILD_WFA_PARALLEL),1)
+  LIBS+=-fopenmp
+endif
 ifeq ($(UNAME), Linux)
   LIBS+=-lrt 
 endif

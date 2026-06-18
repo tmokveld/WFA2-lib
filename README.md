@@ -1,4 +1,6 @@
-# WFA2-lib
+# WFA2-lib + Singletrack
+
+This version of WFA2-lib includes Singletrack for the traceback. It includes optimizations that store only a scope of the indel matrices during alignment, rather than the full matrices, for both gap-affine and dual gap-affine alignments. This integration is compatible with end-to-end, ends-free, and extension alignments using the library's singletrack memory option, including supported non-banded heuristic modes (See https://github.com/LorienLV/singletrack/ for details).
 
 ## 1. INTRODUCTION
 
@@ -415,7 +417,11 @@ The WFA2 library allows computing alignments with different spans or shapes. Alt
 
 ### <a name="wfa2.mem"></a> 3.4 Memory modes
 
-The WFA2 library implements various memory modes: `wavefront_memory_high`, `wavefront_memory_med`, `wavefront_memory_low`, and `wavefront_memory_ultralow`. These modes allow regulating the overall memory consumption. The standard WFA algorithm, which stores explicitly all wavefronts in memory, correspond to the mode `wavefront_memory_high`. Memory modes `wavefront_memory_med` and `wavefront_memory_low` progressively reduce memory usage at the expense of slightly larger alignment times. Memory mode `wavefront_memory_ultralow` utilizes the BiWFA algorithm using a minimal memory footprint of `O(s)` and the same `O(ns+s^2)` time complexity as the original WFA. In practice, `wavefront_memory_ultralow` can outperform `wavefront_memory_high` because the latter experiences memory slowdowns when aligning long and noisy sequences.
+The WFA2 library implements various memory modes: `wavefront_memory_high`, `wavefront_memory_med`, `wavefront_memory_low`, `wavefront_memory_ultralow`, and `wavefront_memory_singletrack`. These modes allow regulating the overall memory consumption. The standard WFA algorithm, which stores explicitly all wavefronts in memory, correspond to the mode `wavefront_memory_high`. Memory modes `wavefront_memory_med` and `wavefront_memory_low` progressively reduce memory usage at the expense of slightly larger alignment times. Memory mode `wavefront_memory_ultralow` utilizes the BiWFA algorithm using a minimal memory footprint of `O(s)` and the same `O(ns+s^2)` time complexity as the original WFA. In practice, `wavefront_memory_ultralow` can outperform `wavefront_memory_high` because the latter experiences memory slowdowns when aligning long and noisy sequences.
+
+Memory mode `wavefront_memory_singletrack` enables the Singletrack traceback for full-scope end-to-end, ends-free, and extension gap-affine and dual gap-affine alignments. It stores all M wavefronts and reuses the indel wavefronts needed during computation. Without heuristics, Singletrack reconstructs an optimal CIGAR from the M wavefronts. With heuristics enabled, Singletrack reconstructs a CIGAR consistent with the heuristic result; heuristic modes can prune or drop alignment search and therefore do not guarantee global optimality.
+
+Singletrack supports the WFA-adaptive, WFMash, X-drop, and Z-drop heuristic strategies for the supported full-scope affine and dual-affine spans. Banded static and banded adaptive heuristics are not supported with Singletrack yet. It is not available for score-only scope, edit/indel/gap-linear distances, or lambda/custom sequence inputs. Singletrack follows the reference implementation and directly accesses padded sequence buffers; use ASCII or packed2bits inputs.
 
 Memory modes can be used transparently with other alignment options and generate identical results. Note that this option does not affect the score-only alignment mode, which always uses a minimal memory footprint of `O(s)`).
 
@@ -428,7 +434,7 @@ Memory modes can be used transparently with other alignment options and generate
 
 The WFA algorithm can be used combined with many heuristics to reduce the alignment time and memory used. As it happens to other alignment methods, heuristics can result in suboptimal solutions and loss of accuracy. Moreover, some heuristics may drop the alignment if the sequences exceed certain divergence thresholds (i.e., x-drop/z-drop). Due to the popularity and efficiency of these methods, the WFA2 library implements many of these heuristics. Note, **it is not about how little DP-matrix you compute, but about how good/accurate the resulting alignments are.**
 
-WFA2's heuristics are classified into the following categories: ['wf-adaptive'](#wfa2.wfadaptive), ['drops'](#wfa2.drops), and ['bands'](#wfa2.bands). It is possible to combine a maximum of one heuristic from each category (OR-ing the strategy values or using the API). In the case of using multiple heuristics, these will be applied in cascade, starting with 'wf-adaptive', then 'drops', and finally 'bands'.
+WFA2's heuristics are classified into the following categories: ['wf-adaptive'](#wfa2.wfadaptive), ['drops'](#wfa2.drops), and ['bands'](#wfa2.bands). The API also exposes WFMash as a weighted adaptive cutoff mode. It is possible to combine a maximum of one heuristic from each category (OR-ing the strategy values or using the API). In the case of using multiple heuristics, these will be applied in cascade, starting with 'wf-adaptive', then 'drops', and finally 'bands'.
 
 - **None (for comparison)**. If no heuristic is used, the WFA behaves exploring cells of the DP-matrix in increasing score order (increasing scores correspond to colours from blue to red).
 
@@ -565,7 +571,7 @@ WFA2's heuristics are classified into the following categories: ['wf-adaptive'](
 - Note that edit and LCS are distance metrics and, thus, the score computed is always positive. However, using weighted distances (e.g., gap-linear and gap-affine) the alignment score is computed using the selected penalties (i.e., the alignment score can be positive or negative). For instance, if WFA2-lib is executed using $M=0$, the final score is expected to be negative.
 
 
-- All WFA2-lib algorithms/variants are stable. That is, for alignments with the same score, all alignment modes always resolve ties (between M, X, I,and D) using the same criteria: M (highest prio) > X > D > I (lowest prio). Only the memory mode `ultralow` (BiWFA) resolves ties differently (although the results are still optimal).
+- All WFA2-lib algorithms/variants are stable. That is, for alignments with the same score, all alignment modes always resolve ties (between M, X, I,and D) using the same criteria: M (highest prio) > X > D > I (lowest prio). Memory modes `ultralow` (BiWFA) and non-heuristic `singletrack` can resolve ties differently (although the results are still optimal). Heuristic-enabled alignments, including Singletrack, remain consistent with the heuristic result but may be suboptimal by design.
 
 
 - WFA2lib follows the convention that describes how to transform the (1) Pattern/Query into the (2) Text/Database/Reference used in classic pattern matching papers. However, the SAM CIGAR specification describes the transformation from (2) Reference to (1) Query. If you want CIGAR-compliant alignments, swap the pattern and text sequences argument when calling the WFA2lib's align functions (to convert all the Ds into Is and vice-versa).

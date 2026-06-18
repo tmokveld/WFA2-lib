@@ -34,7 +34,7 @@ all: OBJS+=$(FOLDER_BUILD)/*.o
 all: align_benchmark
 
 align_benchmark: */*.c */*.h align_benchmark.c $(LIB_WFA)
-	$(CC) $(CC_FLAGS) $(LI_FLAGS) $(PFLAGS) $(OBJS) align_benchmark_params.c align_benchmark.c -o $(BIN) $(LD_FLAGS) -lwfa -lm -fopenmp
+	$(CC) $(CC_FLAGS) $(LI_FLAGS) $(PFLAGS) $(OBJS) align_benchmark_params.c align_benchmark.c -o $(BIN) $(LD_FLAGS) -lwfa -lm
 
 setup:
 	@mkdir -p $(FOLDER_BUILD)
@@ -50,4 +50,3 @@ $(SUBDIRS):
 	$(MAKE) --directory=$@ all
 
 .PHONY: $(SUBDIRS)
-

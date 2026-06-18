@@ -84,6 +84,7 @@ void benchmark_gap_affine2p_wavefront(
         align_input->pattern_length,align_input->text_length);
   }
   timer_stop(&align_input->timer);
+  benchmark_record_wfa_memory(align_input);
   // DEBUG
   if (align_input->debug_flags) {
     benchmark_check_alignment(align_input,wf_aligner->cigar);

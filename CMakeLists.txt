@@ -278,6 +278,34 @@ add_test(
   COMMAND wfa_packed2bits_regression
 )
 
+add_executable(wfa_zdrop_piggyback_regression
+  tests/wfa_zdrop_piggyback_regression.c
+)
+target_link_libraries(wfa_zdrop_piggyback_regression wfa2_static m)
+add_test(
+  NAME wfa_zdrop_piggyback_regression
+  COMMAND wfa_zdrop_piggyback_regression
+)
+
+add_executable(wfa_singletrack_heuristic_api_regression
+  tests/wfa_singletrack_heuristic_api_regression.c
+)
+target_link_libraries(wfa_singletrack_heuristic_api_regression wfa2_static m)
+add_test(
+  NAME wfa_singletrack_heuristic_api_regression
+  COMMAND wfa_singletrack_heuristic_api_regression
+)
+
+add_executable(wfa_cpp_singletrack_regression
+  tests/wfa_cpp_singletrack_regression.cpp
+  bindings/cpp/WFAligner.cpp
+)
+target_link_libraries(wfa_cpp_singletrack_regression wfa2_static m)
+add_test(
+  NAME wfa_cpp_singletrack_regression
+  COMMAND wfa_cpp_singletrack_regression
+)
+
 # ---- Install
 
 # Do not install anything when used with FetchContent

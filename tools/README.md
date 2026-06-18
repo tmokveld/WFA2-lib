@@ -188,6 +188,14 @@ checkout branch `benchmark`.
 #### - Wavefront parameters
 
 ```                                                                  
+          --wfa-memory high|med|low|ultralow|singletrack
+            Selects the WFA memory mode. The singletrack mode is available for full-scope
+            global, ends-free, and extension gap-affine and dual gap-affine WFA alignments,
+            including non-banded heuristic modes. Heuristic-enabled Singletrack alignments
+            return a CIGAR consistent with the heuristic result, not necessarily a globally
+            optimal alignment. Banded heuristics are not supported with Singletrack (yet).
+            Singletrack directly accesses padded sequence buffers; use ASCII or packed2bits inputs.
+
           --minimum-wavefront-length <INT>
             Selects the minimum wavefront length to trigger the WFA-Adapt reduction method.
             
