@@ -196,6 +196,7 @@ void cigar_compute_CIGAR(
     uint32_t* const cigar_buffer = cigar->cigar_buffer;
     int cigar_length = 0;
     char last_op = operations[begin_offset];
+    if (!show_mismatches && last_op=='X') last_op = 'M';
     uint32_t last_op_len = 1;
     int i;
     for (i=begin_offset+1;i<end_offset;++i) {

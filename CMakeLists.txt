@@ -296,6 +296,15 @@ add_test(
   COMMAND wfa_pcigar_extend_regression
 )
 
+add_executable(wfa_cigar_sam_regression
+  tests/wfa_cigar_sam_regression.c
+)
+target_link_libraries(wfa_cigar_sam_regression wfa2_static m)
+add_test(
+  NAME wfa_cigar_sam_regression
+  COMMAND wfa_cigar_sam_regression
+)
+
 add_executable(wfa_singletrack_heuristic_api_regression
   tests/wfa_singletrack_heuristic_api_regression.c
 )
