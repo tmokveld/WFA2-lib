@@ -59,7 +59,6 @@ typedef enum {
 } backtrace_type;
 
 static const uint64_t matches_lut = 0x4D4D4D4D4D4D4D4Dul; // Matches LUT = "MMMMMMMM"
-static const uint64_t mismatches_lut = 0x5858585858585858ul; // Mismatches LUT = "XXXXXXXX"
 static const uint64_t insertions_lut = 0x4949494949494949ul; // Insertions LUT = "IIIIIIII"
 static const uint64_t deletions_lut = 0x4444444444444444ul; // Deletions LUT = "DDDDDDDD"
 
@@ -575,12 +574,12 @@ void wavefront_backtrace_affine(
 
 
 
-#if 1
+#if 0
 /**
  * Check that the cigar produced by the M-only backtrace is coherent, i.e.,
  * it has the expected score and matches and mismatches are consistent with
  * the pattern and text.
- * 
+ *
  * @param penalties The penalties.
  * @param cigar The cigar produced by the M-only backtrace.
  * @param sequences The sequences.
@@ -897,7 +896,6 @@ void wavefront_backtrace_affine_m_only(
   cigar->operations[cigar->end_offset] = '\0';
 
   // Compute starting location
-  affine2p_matrix_type matrix_type = component_end;
   int score = alignment_score;
   int k = alignment_k;
   int h = WAVEFRONT_H(alignment_k,alignment_offset);

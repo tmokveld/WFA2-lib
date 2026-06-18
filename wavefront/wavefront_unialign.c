@@ -152,6 +152,12 @@ static int wavefront_unialign_termination_score(
   if (align_status->status == WF_STATUS_END_UNREACHABLE &&
       end_pos->score >= 0 &&
       end_pos->offset != WAVEFRONT_OFFSET_NULL) {
+    // Piggyback modes keep only a modular traceback window. Z-drop can select
+    // an older endpoint whose traceback block is no longer resident.
+    if (wf_aligner->alignment_scope == compute_alignment &&
+        wf_aligner->wf_components.bt_piggyback) {
+      return score;
+    }
     return end_pos->score;
   }
   return score;
@@ -329,13 +335,13 @@ void wavefront_unialign_print_status(
   wavefront_aligner_print_mode(stream,wf_aligner);
   fprintf(stream,
       "] SequenceLength=(%d,%d) Score %d (~ %2.3f%% aligned). "
-      "MemoryUsed(WF-Slab,BT-buffer)=(%lu MB,%lu MB). "
+      "MemoryUsed(WF-Slab,BT-buffer)=(%llu MB,%llu MB). "
       "Wavefronts ~ %2.3f Moffsets\n",
       pattern_length,
       text_length,
       score,
       aligned_progress,
-      CONVERT_B_TO_MB(slab_size),
-      CONVERT_B_TO_MB(bt_buffer_used),
+      (unsigned long long)CONVERT_B_TO_MB(slab_size),
+      (unsigned long long)CONVERT_B_TO_MB(bt_buffer_used),
       million_offsets);
 }

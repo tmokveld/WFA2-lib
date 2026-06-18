@@ -278,6 +278,15 @@ add_test(
   COMMAND wfa_packed2bits_regression
 )
 
+add_executable(wfa_zdrop_piggyback_regression
+  tests/wfa_zdrop_piggyback_regression.c
+)
+target_link_libraries(wfa_zdrop_piggyback_regression wfa2_static m)
+add_test(
+  NAME wfa_zdrop_piggyback_regression
+  COMMAND wfa_zdrop_piggyback_regression
+)
+
 add_executable(wfa_singletrack_heuristic_api_regression
   tests/wfa_singletrack_heuristic_api_regression.c
 )
