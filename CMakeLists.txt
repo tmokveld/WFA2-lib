@@ -287,6 +287,15 @@ add_test(
   COMMAND wfa_zdrop_piggyback_regression
 )
 
+add_executable(wfa_pcigar_extend_regression
+  tests/wfa_pcigar_extend_regression.c
+)
+target_link_libraries(wfa_pcigar_extend_regression wfa2_static m)
+add_test(
+  NAME wfa_pcigar_extend_regression
+  COMMAND wfa_pcigar_extend_regression
+)
+
 add_executable(wfa_singletrack_heuristic_api_regression
   tests/wfa_singletrack_heuristic_api_regression.c
 )

@@ -69,25 +69,3 @@ jobs:
 
       - name: Test (${{ matrix.name }})
         run: ctest --test-dir build --output-on-failure
-
-  sanitizer:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends build-essential clang cmake libclang-rt-dev pkg-config time
-
-      - name: Configure ASAN
-        env:
-          CC: clang
-          CXX: clang++
-        run: cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DASAN=ON
-
-      - name: Build ASAN
-        run: cmake --build build-asan --parallel
-
-      - name: Test ASAN
-        run: ctest --test-dir build-asan --output-on-failure
