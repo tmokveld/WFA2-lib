@@ -45,6 +45,77 @@ static wavefront_aligner_t* new_aligner(
   return wavefront_aligner_new(&attributes);
 }
 
+static int check_positive_penalty_invariants(
+    const char* const label,
+    wavefront_aligner_attr_t attributes) {
+  attributes.memory_mode = wavefront_memory_singletrack;
+  attributes.alignment_scope = compute_alignment;
+  attributes.heuristic.strategy = wf_heuristic_none;
+
+  wavefront_aligner_t* const wf_aligner = wavefront_aligner_new(&attributes);
+  const wavefront_penalties_t* const penalties = &wf_aligner->penalties;
+  int failed = 0;
+
+  if (penalties->mismatch <= 0) {
+    fprintf(stderr,"%s internal mismatch is not positive: %d\n",
+        label,penalties->mismatch);
+    failed = 1;
+  }
+  if (penalties->gap_extension1 <= 0) {
+    fprintf(stderr,"%s internal gap-extension1 is not positive: %d\n",
+        label,penalties->gap_extension1);
+    failed = 1;
+  }
+  if (attributes.distance_metric == gap_affine_2p &&
+      penalties->gap_extension2 <= 0) {
+    fprintf(stderr,"%s internal gap-extension2 is not positive: %d\n",
+        label,penalties->gap_extension2);
+    failed = 1;
+  }
+
+  wavefront_aligner_delete(wf_aligner);
+  return failed;
+}
+
+static int check_singletrack_penalty_invariants(void) {
+  int failed = 0;
+  wavefront_aligner_attr_t attributes = wavefront_aligner_attr_default;
+
+  attributes.distance_metric = gap_affine;
+  attributes.affine_penalties.match = 0;
+  attributes.affine_penalties.mismatch = 1;
+  attributes.affine_penalties.gap_opening = 0;
+  attributes.affine_penalties.gap_extension = 1;
+  failed |= check_positive_penalty_invariants("affine",attributes);
+
+  attributes.affine_penalties.match = -5;
+  attributes.affine_penalties.mismatch = 1;
+  attributes.affine_penalties.gap_opening = 0;
+  attributes.affine_penalties.gap_extension = 1;
+  failed |= check_positive_penalty_invariants("affine-negative-match",attributes);
+
+  attributes = wavefront_aligner_attr_default;
+  attributes.distance_metric = gap_affine_2p;
+  attributes.affine2p_penalties.match = 0;
+  attributes.affine2p_penalties.mismatch = 1;
+  attributes.affine2p_penalties.gap_opening1 = 0;
+  attributes.affine2p_penalties.gap_extension1 = 1;
+  attributes.affine2p_penalties.gap_opening2 = 0;
+  attributes.affine2p_penalties.gap_extension2 = 1;
+  failed |= check_positive_penalty_invariants("affine2p",attributes);
+
+  attributes.affine2p_penalties.match = -5;
+  attributes.affine2p_penalties.mismatch = 1;
+  attributes.affine2p_penalties.gap_opening1 = 0;
+  attributes.affine2p_penalties.gap_extension1 = 1;
+  attributes.affine2p_penalties.gap_opening2 = 0;
+  attributes.affine2p_penalties.gap_extension2 = 1;
+  failed |= check_positive_penalty_invariants(
+      "affine2p-negative-match",attributes);
+
+  return failed;
+}
+
 static void configure_end_to_end(
     wavefront_aligner_t* const wf_aligner) {
   wavefront_aligner_set_alignment_end_to_end(wf_aligner);
@@ -447,6 +518,7 @@ static int check_span_suite(
 
 int main(void) {
   int failed = 0;
+  failed |= check_singletrack_penalty_invariants();
   failed |= check_case("wfmash",gap_affine,configure_wfmash,check_wfmash);
   failed |= check_case(
       "combined-wfa-wfmash",gap_affine,

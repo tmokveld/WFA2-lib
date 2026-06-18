@@ -1125,9 +1125,9 @@ void wavefront_backtrace_affine_m_only(
     }
   }
 
-  // Account for last operations.
-  // TODO: This only works if mismatch, and indels has > 0 score.
-  // Check that we can assume this. Otherwise, insert boundary condition to the loop.
+  // Account for last operations. The traceback loop above relies on every
+  // score-consuming operation strictly decreasing the score.
+  // wavefront_penalties_set_*() enforces these internal penalty invariants.
   assert(penalties->mismatch > 0);
   if (distance_metric == gap_affine || distance_metric == gap_affine_2p) {
     assert(penalties->gap_extension1 > 0);
