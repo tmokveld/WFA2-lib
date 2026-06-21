@@ -311,6 +311,27 @@ add_test(
   COMMAND wfa_cigar_sam_regression
 )
 
+add_executable(wfa_swg_endsfree_mapping_regression
+  tests/wfa_swg_endsfree_mapping_regression.c
+  tools/align_benchmark/benchmark/benchmark_gap_affine.c
+  tools/align_benchmark/gap_affine/swg.c
+  tools/align_benchmark/gap_affine/affine_matrix.c
+  alignment/cigar.c
+  system/mm_allocator.c
+  system/profiler_counter.c
+  system/profiler_timer.c
+  utils/commons.c
+  utils/vector.c
+)
+target_include_directories(wfa_swg_endsfree_mapping_regression PUBLIC
+  . wavefront system utils tools/align_benchmark
+)
+target_link_libraries(wfa_swg_endsfree_mapping_regression m)
+add_test(
+  NAME wfa_swg_endsfree_mapping_regression
+  COMMAND wfa_swg_endsfree_mapping_regression
+)
+
 add_executable(wfa_singletrack_heuristic_api_regression
   tests/wfa_singletrack_heuristic_api_regression.c
 )

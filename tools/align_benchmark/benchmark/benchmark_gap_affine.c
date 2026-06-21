@@ -81,7 +81,7 @@ void benchmark_gap_affine_swg_endsfree(
   swg_align_endsfree(&affine_matrix,penalties,
       align_input->pattern,align_input->pattern_length,
       align_input->text,align_input->text_length,
-      align_input->pattern_begin_free,align_input->pattern_begin_free,
+      align_input->pattern_begin_free,align_input->pattern_end_free,
       align_input->text_begin_free,align_input->text_end_free,cigar);
   timer_stop(&align_input->timer);
   // DEBUG
