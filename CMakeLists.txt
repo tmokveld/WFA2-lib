@@ -269,6 +269,12 @@ endfunction()
 
 add_wfa_test()
 
+add_test(
+  NAME wfa2lib_singletrack
+  COMMAND ./tests/wfa.singletrack.utest.sh ${CMAKE_CURRENT_BINARY_DIR}
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
 add_executable(wfa_packed2bits_regression
   tests/wfa_packed2bits_regression.c
 )

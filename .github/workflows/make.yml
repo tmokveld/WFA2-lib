@@ -28,7 +28,9 @@ jobs:
         run: make clean all
 
       - name: Test
-        run: bash ./tests/wfa.utest.sh
+        run: |
+          bash ./tests/wfa.utest.sh
+          bash ./tests/wfa.singletrack.utest.sh
 
   cmake:
     runs-on: ${{ matrix.os }}
