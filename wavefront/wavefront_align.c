@@ -88,6 +88,7 @@ void wavefront_align_presets__checks(
    * Checks
    */
   if (wf_aligner->bialigner != NULL) {
+    wavefront_aligner_check_biwfa_unsupported(wf_aligner);
     const bool ends_free =
         form->pattern_begin_free > 0 ||
         form->pattern_end_free > 0 ||
