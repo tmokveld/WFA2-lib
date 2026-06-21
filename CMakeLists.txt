@@ -275,6 +275,12 @@ add_test(
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
+add_test(
+  NAME wfa2lib_biwfa_endsfree
+  COMMAND ./tests/wfa.biwfa.endsfree.proof.py ${CMAKE_CURRENT_BINARY_DIR}/align_benchmark
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
 add_executable(wfa_packed2bits_regression
   tests/wfa_packed2bits_regression.c
 )
