@@ -106,7 +106,7 @@ void wavefront_backtrace_add_nop_to_cigar(cigar_t *const cigar,
   // Blocks of 8-operations
   while (num >= 8) {
     operations -= 8;
-    *((uint64_t*)(operations+1)) = lut_op;
+    memcpy(operations+1,&lut_op,sizeof(lut_op));
     num -= 8;
   }
   // Remaining operations
@@ -131,14 +131,14 @@ void wavefront_backtrace_add_nop_to_cigar(cigar_t *const cigar,
 void wavefront_backtrace_add_lut_to_cigar(cigar_t *const cigar,
                                           const uint64_t lut_op,
                                           int num) {
-  uint64_t* operations = (uint64_t*)(cigar->operations + cigar->begin_offset + 1);
+  char* operations = cigar->operations + cigar->begin_offset + 1;
   // Update offset first
   cigar->begin_offset -= num;
   // Blocks of 8-operations. We may add more than num operations if num is
   // not a multiple of 8. We need enough space for this.
   while (num > 0) {
-    --operations;
-    *operations = lut_op;
+    operations -= 8;
+    memcpy(operations,&lut_op,sizeof(lut_op));
     num -= 8;
   }
 }
@@ -684,14 +684,15 @@ static int wavefront_backtrace_m_only_count_backward_matches(
   const char* const text = wf_aligner->sequences.text;
   const int max_matches = MIN(v,h);
   int nmatches = 0;
-#if __BYTE_ORDER == __LITTLE_ENDIAN
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
   // Blocked backwards extend, bounded to avoid reading before free-start edges.
   while (nmatches + 8 <= max_matches) {
-    const uint64_t* const pattern_block = (uint64_t*)(pattern + v - nmatches - 8);
-    const uint64_t* const text_block = (uint64_t*)(text + h - nmatches - 8);
-    const uint64_t cmp = *pattern_block ^ *text_block;
+    uint64_t pattern_block, text_block;
+    memcpy(&pattern_block,pattern + v - nmatches - 8,sizeof(pattern_block));
+    memcpy(&text_block,text + h - nmatches - 8,sizeof(text_block));
+    const uint64_t cmp = pattern_block ^ text_block;
     if (cmp != 0) {
-      const int equal_left_bits = __builtin_clzl(cmp);
+      const int equal_left_bits = __builtin_clzll(cmp);
       nmatches += DIV_FLOOR(equal_left_bits,8);
       return nmatches;
     }
