@@ -72,9 +72,8 @@ static bool wavefront_backtrace_m_offset(
   if (score >= wf_components->num_wavefronts) return false;
   wavefront_t* const mwavefront = wf_components->mwavefronts[score];
   if (mwavefront == NULL) return false;
-  // Use the historical initialized envelope; active bounds can be heuristic-pruned.
-  if (k < mwavefront->wf_elements_init_min ||
-      mwavefront->wf_elements_init_max < k) {
+  // Use active bounds; initialized padding can include heuristic-pruned states.
+  if (k < mwavefront->lo || mwavefront->hi < k) {
     return false;
   }
   const wf_offset_t m_offset = mwavefront->offsets[k];
