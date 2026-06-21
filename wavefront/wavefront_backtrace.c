@@ -914,11 +914,6 @@ void wavefront_backtrace_affine_m_only(
   const wavefront_penalties_t* const penalties = &wf_aligner->penalties;
   const distance_metric_t distance_metric = penalties->distance_metric;
 
-  // TODO: Do this elsewhere.
-  // We need padding in order to perform the backwards extend.
-  sequences->pattern[-1] = '!';
-  sequences->text[-1] = '?';
-
   // Prepare cigar
   // WARNING: We want padding in the cigar so we can always use LUTs.
   cigar_t* const cigar = wf_aligner->cigar;
