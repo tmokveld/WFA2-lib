@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import product
 import random
 import re
 import subprocess
@@ -13,7 +14,13 @@ from pathlib import Path
 
 
 DNA = "ACGT"
+TINY_DNA = "AC"
+TINY_MAX_LENGTH = 3
 CIGAR_RE = re.compile(r"(\d*)([=MXID])")
+NEGATIVE_MATCH_MESSAGE = (
+    "[WFA] BiWFA ends-free with negative match rewards (match < 0) "
+    "requires aligned-length-aware breakpoint scoring and is not implemented yet\n"
+)
 
 
 @dataclass(frozen=True)
@@ -79,6 +86,26 @@ FREE_END_CONFIGS = [
 ]
 
 
+TINY_FREE_END_CONFIGS = [
+    ("tiny-global", (0, 0, 0, 0)),
+    # align_benchmark treats values in [0.0,1.0] as proportions, not counts.
+    ("tiny-pattern-begin", (2, 0, 0, 0)),
+    ("tiny-pattern-end", (0, 2, 0, 0)),
+    ("tiny-text-begin", (0, 0, 2, 0)),
+    ("tiny-text-end", (0, 0, 0, 2)),
+    ("tiny-all", (2, 2, 2, 2)),
+]
+
+
+HEURISTIC_SMOKE_CONFIGS = [
+    (
+        "wfa-adaptive",
+        ["--wfa-heuristic=wfa-adaptive", "--wfa-heuristic-parameters=10,50,1"],
+    ),
+    ("wfmash", ["--wfa-heuristic=wfmash", "--wfa-heuristic-parameters=10,50,1"]),
+]
+
+
 GLOBAL_CONFIG = ("global", (0, 0, 0, 0))
 
 
@@ -121,6 +148,27 @@ def divergent_pair(length: int) -> tuple[str, str]:
     for idx in range(0, len(text), 3):
         text[idx] = rng.choice([base for base in DNA if base != text[idx]])
     return pattern, "".join(text)
+
+
+def enumerate_sequences(alphabet: str, max_length: int) -> list[str]:
+    sequences: list[str] = []
+    for length in range(1, max_length + 1):
+        sequences.extend("".join(chars) for chars in product(alphabet, repeat=length))
+    return sequences
+
+
+def exhaustive_tiny_cases(free_ends: tuple[int, int, int, int]) -> list[Case]:
+    sequences = enumerate_sequences(TINY_DNA, TINY_MAX_LENGTH)
+    p0, pf, t0, tf = free_ends
+    cases: list[Case] = []
+    for pattern in sequences:
+        if p0 > len(pattern) or pf > len(pattern):
+            continue
+        for text in sequences:
+            if t0 > len(text) or tf > len(text):
+                continue
+            cases.append(Case(pattern, text))
+    return cases
 
 
 def generated_cases(free_ends: tuple[int, int, int, int]) -> list[Case]:
@@ -368,6 +416,49 @@ def fail_with_replay(
     )
 
 
+def check_cases(
+    align_benchmark: Path,
+    workdir: Path,
+    label: str,
+    free_ends: tuple[int, int, int, int],
+    span: str,
+    cases: list[Case],
+    metrics: list[tuple[str, str, dict[str, int]]] | None = None,
+    extra_args: list[str] | None = None,
+) -> None:
+    metrics = METRICS if metrics is None else metrics
+    for metric_label, algorithm, penalties in metrics:
+        print(f">>> Proving BiWFA {label} {metric_label}")
+        name = f"{label}.{metric_label}"
+        high_score = run_align_benchmark(
+            align_benchmark, workdir, f"{name}.high.score",
+            cases, algorithm, "high", span, True, extra_args)
+        biwfa_score = run_align_benchmark(
+            align_benchmark, workdir, f"{name}.biwfa.score",
+            cases, algorithm, "ultralow", span, True, extra_args)
+        biwfa_full = run_align_benchmark(
+            align_benchmark, workdir, f"{name}.biwfa.full",
+            cases, algorithm, "ultralow", span, False, extra_args)
+        for idx, (expected_row, score_row, full_row) in enumerate(
+            zip(high_score.rows, biwfa_score.rows, biwfa_full.rows)
+        ):
+            if expected_row.pattern != score_row.pattern or expected_row.text != score_row.text:
+                raise AssertionError(f"score-only output sequence changed in case {idx}")
+            if expected_row.score != score_row.score:
+                fail_with_replay(
+                    "BiWFA score-only score differs from high-memory score-only",
+                    high_score, biwfa_score, idx, score_row.score, expected_row.score)
+            if expected_row.pattern != full_row.pattern or expected_row.text != full_row.text:
+                raise AssertionError(f"full output sequence changed in case {idx}")
+            observed = cigar_endsfree_score(
+                full_row.pattern, full_row.text, full_row.cigar, penalties, free_ends)
+            if observed != expected_row.score:
+                fail_with_replay(
+                    "BiWFA full CIGAR does not achieve high-memory ends-free score",
+                    high_score, biwfa_full, idx, observed, expected_row.score)
+            check_terminal_convention(cases[idx], full_row)
+
+
 def check_terminal_convention(case: Case, row: AlignmentRow) -> None:
     if case.terminal is None:
         return
@@ -389,36 +480,94 @@ def check_config(
     span: str,
 ) -> None:
     cases = generated_cases(free_ends)
-    for metric_label, algorithm, penalties in METRICS:
-        print(f">>> Proving BiWFA {label} {metric_label}")
-        name = f"{label}.{metric_label}"
-        high_score = run_align_benchmark(
-            align_benchmark, workdir, f"{name}.high.score",
-            cases, algorithm, "high", span, True)
-        biwfa_score = run_align_benchmark(
-            align_benchmark, workdir, f"{name}.biwfa.score",
-            cases, algorithm, "ultralow", span, True)
-        biwfa_full = run_align_benchmark(
-            align_benchmark, workdir, f"{name}.biwfa.full",
-            cases, algorithm, "ultralow", span, False)
-        for idx, (expected_row, score_row, full_row) in enumerate(
-            zip(high_score.rows, biwfa_score.rows, biwfa_full.rows)
-        ):
-            if expected_row.pattern != score_row.pattern or expected_row.text != score_row.text:
-                raise AssertionError(f"score-only output sequence changed in case {idx}")
-            if expected_row.score != score_row.score:
-                fail_with_replay(
-                    "BiWFA score-only score differs from high-memory score-only",
-                    high_score, biwfa_score, idx, score_row.score, expected_row.score)
-            if expected_row.pattern != full_row.pattern or expected_row.text != full_row.text:
-                raise AssertionError(f"full output sequence changed in case {idx}")
-            observed = cigar_endsfree_score(
-                full_row.pattern, full_row.text, full_row.cigar, penalties, free_ends)
-            if observed != expected_row.score:
-                fail_with_replay(
-                    "BiWFA full CIGAR does not achieve high-memory ends-free score",
-                    high_score, biwfa_full, idx, observed, expected_row.score)
-            check_terminal_convention(cases[idx], full_row)
+    check_cases(align_benchmark, workdir, label, free_ends, span, cases)
+
+
+def check_tiny_exhaustive(align_benchmark: Path, workdir: Path) -> None:
+    for label, free_ends in TINY_FREE_END_CONFIGS:
+        span = "global" if free_ends == (0, 0, 0, 0) else "ends-free,%d,%d,%d,%d" % free_ends
+        check_cases(
+            align_benchmark, workdir, label, free_ends, span,
+            exhaustive_tiny_cases(free_ends))
+
+
+def check_negative_match_rejection(align_benchmark: Path, workdir: Path) -> None:
+    configs = [
+        (
+            "affine-score-only",
+            "gap-affine-wfa",
+            ["--affine-penalties=-5,4,6,2"],
+            True,
+        ),
+        (
+            "affine-full",
+            "gap-affine-wfa",
+            ["--affine-penalties=-5,4,6,2"],
+            False,
+        ),
+        (
+            "affine2p-score-only",
+            "gap-affine2p-wfa",
+            ["--affine2p-penalties=-5,4,6,2,24,1"],
+            True,
+        ),
+        (
+            "affine2p-full",
+            "gap-affine2p-wfa",
+            ["--affine2p-penalties=-5,4,6,2,24,1"],
+            False,
+        ),
+    ]
+    cases = [Case("ACGTACGT", "ACGTTACGT")]
+    span = "ends-free,2,0,0,0"
+    for label, algorithm, penalty_args, score_only in configs:
+        print(f">>> Proving BiWFA rejects negative-match {label}")
+        input_path = workdir / f"reject.{label}.seq"
+        output_path = workdir / f"reject.{label}.alg"
+        write_cases(input_path, cases)
+        cmd = [
+            str(align_benchmark),
+            "--input",
+            str(input_path),
+            "--output-full",
+            str(output_path),
+            "--algorithm",
+            algorithm,
+            "--wfa-memory=ultralow",
+            f"--wfa-span={span}",
+            *penalty_args,
+        ]
+        if score_only:
+            cmd.append("--wfa-score-only")
+        completed = subprocess.run(cmd, text=True, capture_output=True)
+        if completed.returncode == 0:
+            raise AssertionError(
+                "BiWFA accepted negative-match ends-free configuration:\n"
+                + " ".join(cmd)
+            )
+        if completed.stdout != "" or completed.stderr != NEGATIVE_MATCH_MESSAGE:
+            raise AssertionError(
+                "BiWFA rejected negative-match ends-free with an unexpected message:\n"
+                + " ".join(cmd)
+                + f"\n\nstdout: {completed.stdout!r}\nstderr: {completed.stderr!r}"
+            )
+
+
+def check_heuristic_smoke(align_benchmark: Path, workdir: Path) -> None:
+    free_ends = (2, 2, 2, 2)
+    span = "ends-free,%d,%d,%d,%d" % free_ends
+    cases = [
+        Case("TTACGTACGTG", "AACGTTCGTGGG"),
+        Case("CCGATTACA", "TGATTTACAAA"),
+    ]
+    metrics = [
+        metric for metric in METRICS
+        if metric[0] in ("affine", "affine2p")
+    ]
+    for heuristic_label, heuristic_args in HEURISTIC_SMOKE_CONFIGS:
+        check_cases(
+            align_benchmark, workdir, f"heuristic.{heuristic_label}",
+            free_ends, span, cases, metrics=metrics, extra_args=heuristic_args)
 
 
 def check_recursive_smoke(align_benchmark: Path, workdir: Path) -> None:
@@ -459,6 +608,9 @@ def main(argv: list[str]) -> int:
         for label, free_ends in FREE_END_CONFIGS:
             span = "ends-free,%d,%d,%d,%d" % free_ends
             check_config(align_benchmark, workdir, label, free_ends, span)
+        check_tiny_exhaustive(align_benchmark, workdir)
+        check_negative_match_rejection(align_benchmark, workdir)
+        check_heuristic_smoke(align_benchmark, workdir)
         check_recursive_smoke(align_benchmark, workdir)
     return 0
 
