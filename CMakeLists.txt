@@ -347,6 +347,15 @@ add_test(
   COMMAND wfa_biwfa_endsfree_rejection_regression
 )
 
+add_executable(wfa_biwfa_endsfree_endpoint_regression
+  tests/wfa_biwfa_endsfree_endpoint_regression.c
+)
+target_link_libraries(wfa_biwfa_endsfree_endpoint_regression wfa2_static m)
+add_test(
+  NAME wfa_biwfa_endsfree_endpoint_regression
+  COMMAND wfa_biwfa_endsfree_endpoint_regression
+)
+
 add_executable(wfa_singletrack_heuristic_api_regression
   tests/wfa_singletrack_heuristic_api_regression.c
 )

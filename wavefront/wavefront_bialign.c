@@ -1176,6 +1176,67 @@ void wavefront_bialign_init_half_1(
   half_form->text_begin_free = 0;
   half_form->text_end_free = text_end_free;
 }
+static bool wavefront_bialign_endsfree_endpoint_legal(
+    alignment_form_t* const form,
+    const int pattern_length,
+    const int text_length,
+    const int v,
+    const int h) {
+  const int pattern_left = pattern_length - v;
+  const int text_left = text_length - h;
+  return (v == pattern_length &&
+          text_left >= 0 &&
+          text_left <= form->text_end_free) ||
+         (h == text_length &&
+          pattern_left >= 0 &&
+          pattern_left <= form->pattern_end_free);
+}
+static void wavefront_bialign_set_cigar_end_position(
+    cigar_t* const cigar,
+    alignment_form_t* const form,
+    const int pattern_length,
+    const int text_length) {
+  int v = 0, h = 0, i;
+  for (i=cigar->begin_offset;i<cigar->end_offset;++i) {
+    switch (cigar->operations[i]) {
+      case 'M':
+      case 'X':
+        ++v; ++h;
+        break;
+      case 'I':
+        ++h;
+        break;
+      case 'D':
+        ++v;
+        break;
+      default:
+        break;
+    }
+  }
+  cigar->end_v = v;
+  cigar->end_h = h;
+  if (form->span != alignment_endsfree ||
+      (form->pattern_end_free == 0 && form->text_end_free == 0)) {
+    return;
+  }
+  for (i=cigar->end_offset-1;i>=cigar->begin_offset;--i) {
+    switch (cigar->operations[i]) {
+      case 'I':
+        --h;
+        break;
+      case 'D':
+        --v;
+        break;
+      default:
+        return;
+    }
+    if (wavefront_bialign_endsfree_endpoint_legal(
+        form,pattern_length,text_length,v,h)) {
+      cigar->end_v = v;
+      cigar->end_h = h;
+    }
+  }
+}
 int wavefront_bialign_compute_score_recursive(
     wavefront_aligner_t* const wf_aligner,
     alignment_form_t* const form,
@@ -1317,8 +1378,8 @@ int wavefront_bialign_alignment(
   if (align_level == 0) {
     cigar_t* const cigar = wf_aligner->cigar;
     cigar->score = wavefront_compute_classic_score(wf_aligner,pattern_length,text_length,breakpoint.score);
-    cigar->end_v = pattern_length;
-    cigar->end_h = text_length;
+    wavefront_bialign_set_cigar_end_position(
+        cigar,form,pattern_length,text_length);
   }
   return WF_STATUS_OK; // All good
 }
