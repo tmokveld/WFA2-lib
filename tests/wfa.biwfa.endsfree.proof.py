@@ -203,6 +203,21 @@ def generated_cases(free_ends: tuple[int, int, int, int]) -> list[Case]:
         cases.append(Case("C" * p0 + core, core + "A" * tf))
     if t0 and pf:
         cases.append(Case(core + "C" * pf, "G" * t0 + core))
+    long_exact = random_dna(rng, 120)
+    if p0 and tf:
+        cases.append(
+            Case(
+                random_dna(rng, p0) + long_exact,
+                long_exact + random_dna(rng, tf),
+            )
+        )
+    if t0 and pf:
+        cases.append(
+            Case(
+                long_exact + random_dna(rng, pf),
+                random_dna(rng, t0) + long_exact,
+            )
+        )
     for _ in range(8):
         base = random_dna(rng, rng.randint(16, 38))
         mate = mutate(rng, base, rng.randint(1, 8))

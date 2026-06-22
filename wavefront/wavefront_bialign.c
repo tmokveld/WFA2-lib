@@ -1204,6 +1204,12 @@ static bool wavefront_bialign_form_has_end_free(
   return form->span == alignment_endsfree &&
       (form->pattern_end_free > 0 || form->text_end_free > 0);
 }
+static bool wavefront_bialign_form_has_begin_and_end_free(
+    alignment_form_t* const form) {
+  return form->span == alignment_endsfree &&
+      (form->pattern_begin_free > 0 || form->text_begin_free > 0) &&
+      (form->pattern_end_free > 0 || form->text_end_free > 0);
+}
 static void wavefront_bialign_set_cigar_end_position(
     cigar_t* const cigar,
     alignment_form_t* const form,
@@ -1284,12 +1290,13 @@ int wavefront_bialign_compute_score_recursive(
     wavefront_aligner_t* const wf_reverse = wf_aligner->bialigner->wf_reverse;
     const bool forward_reached =
         wf_forward->align_status.status == WF_STATUS_END_REACHED;
-    result->score = forward_reached ?
-        wf_forward->align_status.score : wf_reverse->align_status.score;
-    if (!forward_reached && wavefront_bialign_form_has_end_free(form)) {
+    if (wavefront_bialign_form_has_begin_and_end_free(form) ||
+        (!forward_reached && wavefront_bialign_form_has_end_free(form))) {
       return wavefront_bialign_base_score(
           wf_aligner,form,component_begin,component_end,result);
     }
+    result->score = forward_reached ?
+        wf_forward->align_status.score : wf_reverse->align_status.score;
     result->end_v = pattern_length;
     result->end_h = text_length;
     return WF_STATUS_OK;
