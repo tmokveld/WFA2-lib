@@ -1322,8 +1322,10 @@ int wavefront_bialign_compute_score_recursive(
       &form_1,breakpoint.component,component_end,
       breakpoint.score_reverse,align_level+1,&result_1);
   if (align_status != WF_STATUS_OK) return align_status;
-  // Add internal scores. Child component states preserve gap-continuation costs.
-  result->score = result_0.score + result_1.score;
+  // Keep the parent bialignment score. Child recursions recover endpoint
+  // metadata; summing child scores can mis-account affine gap continuation at
+  // the breakpoint component.
+  result->score = breakpoint.score;
   if (wavefront_bialign_form_has_end_free(&form_1)) {
     result->end_v = breakpoint_v + result_1.end_v;
     result->end_h = breakpoint_h + result_1.end_h;
@@ -1348,9 +1350,23 @@ int wavefront_bialign_alignment(
   const int text_end = sequences->text_begin + sequences->text_length;
   const int pattern_length = pattern_end - pattern_begin;
   const int text_length = text_end - text_begin;
+  const bool unsafe_endsfree_component =
+      (form->span == alignment_endsfree) &&
+      (component_begin != affine2p_matrix_M ||
+       component_end != affine2p_matrix_M);
   // Trivial cases
-  if (text_length == 0 || pattern_length == 0 ||
-      score_remaining <= WF_BIALIGN_FALLBACK_MIN_SCORE) {
+  if ((text_length == 0 || pattern_length == 0) &&
+      (component_begin != affine2p_matrix_M ||
+       component_end != affine2p_matrix_M)) {
+    if (text_length == 0) {
+      cigar_append_deletion(wf_aligner->cigar,pattern_length);
+    } else {
+      cigar_append_insertion(wf_aligner->cigar,text_length);
+    }
+    return WF_STATUS_OK;
+  } else if (text_length == 0 || pattern_length == 0 ||
+             (score_remaining <= WF_BIALIGN_FALLBACK_MIN_SCORE &&
+              !unsafe_endsfree_component)) {
     // Fall back to regular WFA
     return wavefront_bialign_base(wf_aligner,form,
         component_begin,component_end,align_level);
