@@ -341,6 +341,62 @@ static int check_biwfa_endpoint_case(
   return failed;
 }
 
+static int check_score_only_endpoint(
+    const char* const label,
+    const wavefront_memory_t memory_mode,
+    const endsfree_case_t* const config,
+    const char* const pattern,
+    const char* const text,
+    const int expected_score,
+    const int expected_end_v,
+    const int expected_end_h) {
+  wavefront_aligner_t* const wf_aligner = new_affine_biwfa_aligner(
+      compute_score,memory_mode,config);
+  int failed = align_or_fail(label,wf_aligner,pattern,text);
+  if (!failed && wf_aligner->cigar->score != expected_score) {
+    fprintf(stderr,"%s: score-only score mismatch observed=%d expected=%d\n",
+        label,wf_aligner->cigar->score,expected_score);
+    failed = 1;
+  }
+  if (!failed &&
+      (wf_aligner->cigar->end_v != expected_end_v ||
+       wf_aligner->cigar->end_h != expected_end_h)) {
+    fprintf(stderr,"%s: score-only endpoint mismatch observed=(%d,%d) "
+        "expected=(%d,%d)\n",
+        label,wf_aligner->cigar->end_v,wf_aligner->cigar->end_h,
+        expected_end_v,expected_end_h);
+    failed = 1;
+  }
+  wavefront_aligner_delete(wf_aligner);
+  return failed;
+}
+
+static int check_score_only_endpoint_case(
+    const endsfree_case_t* const config,
+    const char* const pattern,
+    const char* const text,
+    const int expected_end_v,
+    const int expected_end_h) {
+  int failed = 0;
+  wavefront_aligner_t* const oracle = new_affine_biwfa_aligner(
+      compute_score,wavefront_memory_high,config);
+  failed |= align_or_fail(config->label,oracle,pattern,text);
+  const int expected_score = oracle->cigar->score;
+  wavefront_aligner_delete(oracle);
+  if (failed) return failed;
+
+  char label[128];
+  snprintf(label,sizeof(label),"%s-score-high",config->label);
+  failed |= check_score_only_endpoint(
+      label,wavefront_memory_high,config,pattern,text,
+      expected_score,expected_end_v,expected_end_h);
+  snprintf(label,sizeof(label),"%s-score-ultralow",config->label);
+  failed |= check_score_only_endpoint(
+      label,wavefront_memory_ultralow,config,pattern,text,
+      expected_score,expected_end_v,expected_end_h);
+  return failed;
+}
+
 static int check_global_endpoint(void) {
   char pattern[256], text[256];
   build_divergent_pair(pattern,text,180);
@@ -370,6 +426,7 @@ int main(void) {
       "text-end",0,0,0,8
   };
   failed |= check_biwfa_endpoint_case(&text_end,pattern,text);
+  failed |= check_score_only_endpoint_case(&text_end,pattern,text,900,900);
 
   snprintf(pattern,sizeof(pattern),"%sGGGGGGGG",core_pattern);
   snprintf(text,sizeof(text),"%s",core_text);
@@ -377,6 +434,7 @@ int main(void) {
       "pattern-end",0,8,0,0
   };
   failed |= check_biwfa_endpoint_case(&pattern_end,pattern,text);
+  failed |= check_score_only_endpoint_case(&pattern_end,pattern,text,900,900);
 
   snprintf(pattern,sizeof(pattern),"CCCC%s",core_pattern);
   snprintf(text,sizeof(text),"%sAAAA",core_text);
@@ -384,21 +442,25 @@ int main(void) {
       "pattern-begin-text-end",4,0,0,4
   };
   failed |= check_biwfa_endpoint_case(&combined,pattern,text);
+  failed |= check_score_only_endpoint_case(&combined,pattern,text,904,900);
 
   const endsfree_case_t empty_text_pattern_end = {
       "empty-text-pattern-end",0,1,0,0
   };
   failed |= check_biwfa_endpoint_case(&empty_text_pattern_end,"A","");
+  failed |= check_score_only_endpoint_case(&empty_text_pattern_end,"A","",0,0);
 
   const endsfree_case_t empty_pattern_text_end = {
       "empty-pattern-text-end",0,0,0,1
   };
   failed |= check_biwfa_endpoint_case(&empty_pattern_text_end,"","A");
+  failed |= check_score_only_endpoint_case(&empty_pattern_text_end,"","A",0,0);
 
   const endsfree_case_t both_empty = {
       "both-empty",0,0,0,0
   };
   failed |= check_biwfa_endpoint_case(&both_empty,"","");
+  failed |= check_score_only_endpoint_case(&both_empty,"","",0,0);
 
   failed |= check_global_endpoint();
   return failed;

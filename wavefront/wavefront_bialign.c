@@ -156,6 +156,12 @@ void wavefront_bialign_init(
 /*
  * Bidirectional Alignment (base cases)
  */
+typedef struct {
+  int score;
+  int end_v;
+  int end_h;
+} wf_bialign_score_result_t;
+
 int wavefront_bialign_base(
     wavefront_aligner_t* const wf_aligner,
     alignment_form_t* const form,
@@ -193,7 +199,7 @@ int wavefront_bialign_base_score(
     alignment_form_t* const form,
     const affine2p_matrix_type component_begin,
     const affine2p_matrix_type component_end,
-    int* const alignment_score) {
+    wf_bialign_score_result_t* const result) {
   // Parameters
   wavefront_aligner_t* const wf_base = wf_aligner->bialigner->wf_base;
   const alignment_scope_t alignment_scope = wf_base->alignment_scope;
@@ -208,7 +214,9 @@ int wavefront_bialign_base_score(
   // Set status and return
   const int align_status = wf_base->align_status.status;
   if (align_status == WF_STATUS_ALG_COMPLETED) {
-    *alignment_score = wf_base->align_status.score;
+    result->score = wf_base->align_status.score;
+    result->end_v = wf_base->cigar->end_v;
+    result->end_h = wf_base->cigar->end_h;
     return WF_STATUS_OK;
   } else {
     return WF_STATUS_UNATTAINABLE;
@@ -1191,6 +1199,11 @@ static bool wavefront_bialign_endsfree_endpoint_legal(
           pattern_left >= 0 &&
           pattern_left <= form->pattern_end_free);
 }
+static bool wavefront_bialign_form_has_end_free(
+    alignment_form_t* const form) {
+  return form->span == alignment_endsfree &&
+      (form->pattern_end_free > 0 || form->text_end_free > 0);
+}
 static void wavefront_bialign_set_cigar_end_position(
     cigar_t* const cigar,
     alignment_form_t* const form,
@@ -1244,7 +1257,7 @@ int wavefront_bialign_compute_score_recursive(
     const affine2p_matrix_type component_end,
     const int score_remaining,
     const int align_level,
-    int* const alignment_score) {
+    wf_bialign_score_result_t* const result) {
   // Parameters
   wavefront_sequences_t* const sequences = &wf_aligner->bialigner->wf_forward->sequences;
   const int pattern_begin = sequences->pattern_begin;
@@ -1258,7 +1271,7 @@ int wavefront_bialign_compute_score_recursive(
   if (text_length == 0 || pattern_length == 0 ||
       min_length || score_remaining <= WF_BIALIGN_FALLBACK_MIN_SCORE) {
     return wavefront_bialign_base_score(
-        wf_aligner,form,component_begin,component_end,alignment_score);
+        wf_aligner,form,component_begin,component_end,result);
   }
   // Find breakpoint in the alignment
   wf_bialign_breakpoint_t breakpoint;
@@ -1268,8 +1281,16 @@ int wavefront_bialign_compute_score_recursive(
   if (align_status == WF_STATUS_END_REACHED) {
     wavefront_aligner_t* const wf_forward = wf_aligner->bialigner->wf_forward;
     wavefront_aligner_t* const wf_reverse = wf_aligner->bialigner->wf_reverse;
-    *alignment_score = (wf_forward->align_status.status == WF_STATUS_END_REACHED) ?
+    const bool forward_reached =
+        wf_forward->align_status.status == WF_STATUS_END_REACHED;
+    result->score = forward_reached ?
         wf_forward->align_status.score : wf_reverse->align_status.score;
+    if (!forward_reached && wavefront_bialign_form_has_end_free(form)) {
+      return wavefront_bialign_base_score(
+          wf_aligner,form,component_begin,component_end,result);
+    }
+    result->end_v = pattern_length;
+    result->end_h = text_length;
     return WF_STATUS_OK;
   } else if (align_status != WF_STATUS_OK) {
     return align_status;
@@ -1283,10 +1304,10 @@ int wavefront_bialign_compute_score_recursive(
       pattern_begin,pattern_begin+breakpoint_v,
       text_begin,text_begin+breakpoint_h);
   wavefront_bialign_init_half_0(form,&form_0,breakpoint_v,breakpoint_h);
-  int alignment_score_0;
+  wf_bialign_score_result_t result_0;
   align_status = wavefront_bialign_compute_score_recursive(wf_aligner,
       &form_0,component_begin,breakpoint.component,
-      breakpoint.score_forward,align_level+1,&alignment_score_0);
+      breakpoint.score_forward,align_level+1,&result_0);
   if (align_status != WF_STATUS_OK) return align_status;
   // Align half_1
   alignment_form_t form_1;
@@ -1295,13 +1316,20 @@ int wavefront_bialign_compute_score_recursive(
       text_begin+breakpoint_h,text_end);
   wavefront_bialign_init_half_1(
       form,&form_1,pattern_length-breakpoint_v,text_length-breakpoint_h);
-  int alignment_score_1;
+  wf_bialign_score_result_t result_1;
   align_status = wavefront_bialign_compute_score_recursive(wf_aligner,
       &form_1,breakpoint.component,component_end,
-      breakpoint.score_reverse,align_level+1,&alignment_score_1);
+      breakpoint.score_reverse,align_level+1,&result_1);
   if (align_status != WF_STATUS_OK) return align_status;
   // Add internal scores. Child component states preserve gap-continuation costs.
-  *alignment_score = alignment_score_0 + alignment_score_1;
+  result->score = result_0.score + result_1.score;
+  if (wavefront_bialign_form_has_end_free(&form_1)) {
+    result->end_v = breakpoint_v + result_1.end_v;
+    result->end_h = breakpoint_h + result_1.end_h;
+  } else {
+    result->end_v = pattern_length;
+    result->end_h = text_length;
+  }
   return WF_STATUS_OK;
 }
 int wavefront_bialign_alignment(
@@ -1399,15 +1427,15 @@ int wavefront_bialign_compute_score(
           form->text_begin_free > 0 ||
           form->text_end_free > 0);
   if (ends_free && wf_aligner->penalties.match == 0) {
-    int alignment_score;
+    wf_bialign_score_result_t result;
     const int align_status = wavefront_bialign_compute_score_recursive(wf_aligner,
-        form,affine2p_matrix_M,affine2p_matrix_M,INT_MAX,0,&alignment_score);
+        form,affine2p_matrix_M,affine2p_matrix_M,INT_MAX,0,&result);
     cigar_t* const cigar = wf_aligner->cigar;
     if (align_status == WF_STATUS_OK) {
       cigar->score = wavefront_compute_classic_score(
-          wf_aligner,pattern_length,text_length,alignment_score);
-      cigar->end_v = pattern_length;
-      cigar->end_h = text_length;
+          wf_aligner,result.end_v,result.end_h,result.score);
+      cigar->end_v = result.end_v;
+      cigar->end_h = result.end_h;
       return WF_STATUS_OK;
     } else {
       return align_status;
