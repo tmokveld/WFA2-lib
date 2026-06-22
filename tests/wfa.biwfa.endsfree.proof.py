@@ -21,6 +21,10 @@ NEGATIVE_MATCH_MESSAGE = (
     "[WFA] BiWFA ends-free with negative match rewards (match < 0) "
     "requires aligned-length-aware breakpoint scoring and is not implemented yet\n"
 )
+BIWFA_RECURSION_RE = re.compile(
+    r"\[WFA::BiAlign\]\[Recursion=(\d+)\].*"
+    r"score,comp\) = \(\d+,\d+,(\d+),([A-Z0-9]+)\)"
+)
 
 
 @dataclass(frozen=True)
@@ -621,6 +625,58 @@ def check_recursive_smoke(align_benchmark: Path, workdir: Path) -> None:
         )
 
 
+def check_gap_component_score_floor(align_benchmark: Path, workdir: Path) -> None:
+    rng = random.Random(0xB1A11)
+    core = random_dna(rng, 1000)
+    gap = random_dna(rng, 8000)
+    cases = [Case(core, core[:500] + gap + core[500:])]
+    check_cases(
+        align_benchmark,
+        workdir,
+        "gap-component-floor",
+        (80, 80, 80, 80),
+        "ends-free,80,80,80,80",
+        cases,
+        metrics=[metric for metric in METRICS if metric[0] == "affine"],
+    )
+    input_path = workdir / "gap-component-floor.seq"
+    output_path = workdir / "gap-component-floor.alg"
+    write_cases(input_path, cases)
+    cmd = [
+        str(align_benchmark),
+        "--input",
+        str(input_path),
+        "--output-full",
+        str(output_path),
+        "--algorithm",
+        "gap-affine-wfa",
+        "--wfa-memory=ultralow",
+        "--wfa-span=ends-free,80,80,80,80",
+        "--verbose=3",
+    ]
+    completed = subprocess.run(cmd, text=True, capture_output=True)
+    if completed.returncode != 0:
+        raise RuntimeError(
+            "gap-component score-floor case failed:\n" + " ".join(cmd)
+        )
+    debug = completed.stdout + completed.stderr
+    recursion = [
+        (int(level), int(score), component)
+        for level, score, component in BIWFA_RECURSION_RE.findall(debug)
+    ]
+    if not recursion:
+        raise AssertionError(
+            "gap-component case did not show recursive divide-and-conquer\n"
+            + " ".join(cmd)
+        )
+    max_depth = max(level for level, _, _ in recursion)
+    if max_depth > 6:
+        raise AssertionError(
+            f"gap-component recursion escaped the score floor: depth={max_depth}\n"
+            + " ".join(cmd)
+        )
+
+
 def main(argv: list[str]) -> int:
     align_benchmark = find_align_benchmark(argv)
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -634,6 +690,7 @@ def main(argv: list[str]) -> int:
         check_negative_match_rejection(align_benchmark, workdir)
         check_heuristic_smoke(align_benchmark, workdir)
         check_recursive_smoke(align_benchmark, workdir)
+        check_gap_component_score_floor(align_benchmark, workdir)
     return 0
 
 

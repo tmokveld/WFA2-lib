@@ -1357,10 +1357,8 @@ int wavefront_bialign_alignment(
   const int text_end = sequences->text_begin + sequences->text_length;
   const int pattern_length = pattern_end - pattern_begin;
   const int text_length = text_end - text_begin;
-  const bool unsafe_endsfree_component =
-      (form->span == alignment_endsfree) &&
-      (component_begin != affine2p_matrix_M ||
-       component_end != affine2p_matrix_M);
+  const bool min_length =
+      MAX(pattern_length,text_length) <= WF_BIALIGN_FALLBACK_MIN_LENGTH;
   // Trivial cases
   if ((text_length == 0 || pattern_length == 0) &&
       (component_begin != affine2p_matrix_M ||
@@ -1372,9 +1370,9 @@ int wavefront_bialign_alignment(
     }
     return WF_STATUS_OK;
   } else if (text_length == 0 || pattern_length == 0 ||
-             (score_remaining <= WF_BIALIGN_FALLBACK_MIN_SCORE &&
-              !unsafe_endsfree_component)) {
-    // Fall back to regular WFA
+             score_remaining <= WF_BIALIGN_FALLBACK_MIN_SCORE ||
+             (min_length && form->span == alignment_endsfree)) {
+    // Fall back to component-aware WFA
     return wavefront_bialign_base(wf_aligner,form,
         component_begin,component_end,align_level);
   }
