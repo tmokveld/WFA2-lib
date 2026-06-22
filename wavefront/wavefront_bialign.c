@@ -1448,7 +1448,8 @@ int wavefront_bialign_compute_score(
           form->pattern_end_free > 0 ||
           form->text_begin_free > 0 ||
           form->text_end_free > 0);
-  if (ends_free && wf_aligner->penalties.match == 0 &&
+  if (wf_aligner->score_only_recover_endpoints &&
+      ends_free && wf_aligner->penalties.match == 0 &&
       wavefront_bialign_form_has_end_free(form)) {
     wf_bialign_score_result_t result;
     const int align_status = wavefront_bialign_compute_score_recursive(wf_aligner,
@@ -1476,6 +1477,24 @@ int wavefront_bialign_compute_score(
   }
   // Check status
   cigar_t* const cigar = wf_aligner->cigar;
+  if (align_status == WF_STATUS_END_REACHED &&
+      ends_free && wf_aligner->penalties.match == 0 &&
+      wavefront_bialign_form_has_end_free(form)) {
+    const bool forward_reached =
+        wf_forward->align_status.status == WF_STATUS_END_REACHED;
+    if (wavefront_bialign_form_has_begin_and_end_free(form) ||
+        !forward_reached) {
+      wf_bialign_score_result_t result;
+      const int recovery_status = wavefront_bialign_base_score(wf_aligner,
+          form,affine2p_matrix_M,affine2p_matrix_M,&result);
+      if (recovery_status != WF_STATUS_OK) return recovery_status;
+      cigar->score = wavefront_compute_classic_score(
+          wf_aligner,result.end_v,result.end_h,result.score);
+      cigar->end_v = result.end_v;
+      cigar->end_h = result.end_h;
+      return WF_STATUS_OK;
+    }
+  }
   if (align_status == WF_STATUS_OK || align_status == WF_STATUS_END_REACHED) {
     if (align_status == WF_STATUS_END_REACHED) {
       breakpoint.score = (wf_forward->align_status.status == WF_STATUS_END_REACHED) ?

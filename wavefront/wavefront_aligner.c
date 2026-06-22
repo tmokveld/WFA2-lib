@@ -239,6 +239,7 @@ void wavefront_aligner_init_alignment(
   wf_aligner->align_mode_tag = NULL;
   // Score & form
   wf_aligner->alignment_scope = attributes->alignment_scope;
+  wf_aligner->score_only_recover_endpoints = attributes->score_only_recover_endpoints;
   wf_aligner->alignment_form = attributes->alignment_form;
   // Penalties
   wavefront_aligner_init_penalties(wf_aligner,attributes);
@@ -575,6 +576,11 @@ void wavefront_aligner_set_alignment_extension(
     wavefront_aligner_t* const wf_aligner) {
   wf_aligner->alignment_form.span = alignment_endsfree;
   wf_aligner->alignment_form.extension = true;
+}
+void wavefront_aligner_set_score_only_recover_endpoints(
+    wavefront_aligner_t* const wf_aligner,
+    const bool recover_endpoints) {
+  wf_aligner->score_only_recover_endpoints = recover_endpoints;
 }
 /*
  * Heuristic configuration

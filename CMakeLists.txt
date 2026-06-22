@@ -356,6 +356,15 @@ add_test(
   COMMAND wfa_biwfa_endsfree_endpoint_regression
 )
 
+add_executable(wfa_biwfa_endsfree_score_perf_regression
+  tests/wfa_biwfa_endsfree_score_perf_regression.c
+)
+target_link_libraries(wfa_biwfa_endsfree_score_perf_regression wfa2_static m)
+add_test(
+  NAME wfa_biwfa_endsfree_score_perf_regression
+  COMMAND wfa_biwfa_endsfree_score_perf_regression
+)
+
 add_executable(wfa_singletrack_heuristic_api_regression
   tests/wfa_singletrack_heuristic_api_regression.c
 )

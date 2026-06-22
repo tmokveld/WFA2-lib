@@ -57,6 +57,7 @@ static wavefront_aligner_t* new_affine_biwfa_aligner(
   attrs.affine_penalties.mismatch = 4;
   attrs.affine_penalties.gap_opening = 6;
   attrs.affine_penalties.gap_extension = 2;
+  attrs.score_only_recover_endpoints = true;
   if (config != NULL) {
     attrs.alignment_form.span = alignment_endsfree;
     attrs.alignment_form.extension = false;
