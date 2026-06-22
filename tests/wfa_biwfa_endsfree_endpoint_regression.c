@@ -69,6 +69,26 @@ static wavefront_aligner_t* new_affine_biwfa_aligner(
   return wavefront_aligner_new(&attrs);
 }
 
+static wavefront_aligner_t* new_affine_reward_aligner(
+    const alignment_scope_t scope,
+    const endsfree_case_t* const config) {
+  wavefront_aligner_attr_t attrs = wavefront_aligner_attr_default;
+  attrs.memory_mode = wavefront_memory_high;
+  attrs.alignment_scope = scope;
+  attrs.distance_metric = gap_affine;
+  attrs.affine_penalties.match = -1;
+  attrs.affine_penalties.mismatch = 4;
+  attrs.affine_penalties.gap_opening = 6;
+  attrs.affine_penalties.gap_extension = 2;
+  attrs.alignment_form.span = alignment_endsfree;
+  attrs.alignment_form.extension = false;
+  attrs.alignment_form.pattern_begin_free = config->pattern_begin_free;
+  attrs.alignment_form.pattern_end_free = config->pattern_end_free;
+  attrs.alignment_form.text_begin_free = config->text_begin_free;
+  attrs.alignment_form.text_end_free = config->text_end_free;
+  return wavefront_aligner_new(&attrs);
+}
+
 static int align_or_fail(
     const char* const label,
     wavefront_aligner_t* const wf_aligner,
@@ -398,6 +418,38 @@ static int check_score_only_endpoint_case(
   return failed;
 }
 
+static int check_unidirectional_reward_score_case(
+    const endsfree_case_t* const config,
+    const char* const pattern,
+    const char* const text) {
+  int failed = 0;
+  wavefront_aligner_t* const score_only = new_affine_reward_aligner(
+      compute_score,config);
+  wavefront_aligner_t* const alignment = new_affine_reward_aligner(
+      compute_alignment,config);
+  failed |= align_or_fail(config->label,score_only,pattern,text);
+  failed |= align_or_fail(config->label,alignment,pattern,text);
+  if (!failed && score_only->cigar->score != alignment->cigar->score) {
+    fprintf(stderr,"%s-reward: score-only score mismatch observed=%d "
+        "expected=%d\n",
+        config->label,score_only->cigar->score,alignment->cigar->score);
+    failed = 1;
+  }
+  if (!failed &&
+      (score_only->cigar->end_v != alignment->cigar->end_v ||
+       score_only->cigar->end_h != alignment->cigar->end_h)) {
+    fprintf(stderr,"%s-reward: score-only endpoint mismatch observed=(%d,%d) "
+        "expected=(%d,%d)\n",
+        config->label,
+        score_only->cigar->end_v,score_only->cigar->end_h,
+        alignment->cigar->end_v,alignment->cigar->end_h);
+    failed = 1;
+  }
+  wavefront_aligner_delete(score_only);
+  wavefront_aligner_delete(alignment);
+  return failed;
+}
+
 static int check_global_endpoint(void) {
   char pattern[256], text[256];
   build_divergent_pair(pattern,text,180);
@@ -428,6 +480,7 @@ int main(void) {
   };
   failed |= check_biwfa_endpoint_case(&text_end,pattern,text);
   failed |= check_score_only_endpoint_case(&text_end,pattern,text,900,900);
+  failed |= check_unidirectional_reward_score_case(&text_end,pattern,text);
 
   snprintf(pattern,sizeof(pattern),"%sGGGGGGGG",core_pattern);
   snprintf(text,sizeof(text),"%s",core_text);
@@ -436,6 +489,7 @@ int main(void) {
   };
   failed |= check_biwfa_endpoint_case(&pattern_end,pattern,text);
   failed |= check_score_only_endpoint_case(&pattern_end,pattern,text,900,900);
+  failed |= check_unidirectional_reward_score_case(&pattern_end,pattern,text);
 
   snprintf(pattern,sizeof(pattern),"CCCC%s",core_pattern);
   snprintf(text,sizeof(text),"%sAAAA",core_text);
@@ -444,6 +498,7 @@ int main(void) {
   };
   failed |= check_biwfa_endpoint_case(&combined,pattern,text);
   failed |= check_score_only_endpoint_case(&combined,pattern,text,904,900);
+  failed |= check_unidirectional_reward_score_case(&combined,pattern,text);
 
   const endsfree_case_t empty_text_pattern_end = {
       "empty-text-pattern-end",0,1,0,0
