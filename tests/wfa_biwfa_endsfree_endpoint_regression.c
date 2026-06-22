@@ -89,6 +89,30 @@ static wavefront_aligner_t* new_affine_reward_aligner(
   return wavefront_aligner_new(&attrs);
 }
 
+static wavefront_aligner_t* new_affine2p_score_aligner(
+    const wavefront_memory_t memory_mode,
+    const endsfree_case_t* const config) {
+  wavefront_aligner_attr_t attrs = wavefront_aligner_attr_default;
+  attrs.memory_mode = memory_mode;
+  attrs.alignment_scope = compute_score;
+  attrs.distance_metric = gap_affine_2p;
+  attrs.affine2p_penalties.match = 0;
+  attrs.affine2p_penalties.mismatch = 4;
+  attrs.affine2p_penalties.gap_opening1 = 6;
+  attrs.affine2p_penalties.gap_extension1 = 2;
+  attrs.affine2p_penalties.gap_opening2 = 24;
+  attrs.affine2p_penalties.gap_extension2 = 1;
+  if (config != NULL) {
+    attrs.alignment_form.span = alignment_endsfree;
+    attrs.alignment_form.extension = false;
+    attrs.alignment_form.pattern_begin_free = config->pattern_begin_free;
+    attrs.alignment_form.pattern_end_free = config->pattern_end_free;
+    attrs.alignment_form.text_begin_free = config->text_begin_free;
+    attrs.alignment_form.text_end_free = config->text_end_free;
+  }
+  return wavefront_aligner_new(&attrs);
+}
+
 static int align_or_fail(
     const char* const label,
     wavefront_aligner_t* const wf_aligner,
@@ -418,6 +442,34 @@ static int check_score_only_endpoint_case(
   return failed;
 }
 
+static int check_default_score_only_affine2p_case(
+    const endsfree_case_t* const config,
+    const char* const pattern,
+    const char* const text,
+    const int expected_score) {
+  wavefront_aligner_t* const oracle = new_affine2p_score_aligner(
+      wavefront_memory_high,config);
+  wavefront_aligner_t* const biwfa = new_affine2p_score_aligner(
+      wavefront_memory_ultralow,config);
+  int failed = align_or_fail(config->label,oracle,pattern,text);
+  failed |= align_or_fail(config->label,biwfa,pattern,text);
+  if (!failed && oracle->cigar->score != expected_score) {
+    fprintf(stderr,"%s-affine2p-default-score: oracle mismatch observed=%d "
+        "expected=%d\n",
+        config->label,oracle->cigar->score,expected_score);
+    failed = 1;
+  }
+  if (!failed && biwfa->cigar->score != oracle->cigar->score) {
+    fprintf(stderr,"%s-affine2p-default-score: score mismatch observed=%d "
+        "expected=%d\n",
+        config->label,biwfa->cigar->score,oracle->cigar->score);
+    failed = 1;
+  }
+  wavefront_aligner_delete(oracle);
+  wavefront_aligner_delete(biwfa);
+  return failed;
+}
+
 static int check_unidirectional_reward_score_case(
     const endsfree_case_t* const config,
     const char* const pattern,
@@ -499,6 +551,16 @@ int main(void) {
   failed |= check_biwfa_endpoint_case(&combined,pattern,text);
   failed |= check_score_only_endpoint_case(&combined,pattern,text,904,900);
   failed |= check_unidirectional_reward_score_case(&combined,pattern,text);
+
+  snprintf(pattern,sizeof(pattern),
+      "CCGTTCACTGTTGAACGGACGCTCGAGCAAAAGAATAGGGATAGGACGATGGCGCT"
+      "CCGGTGCTCTCCCCCTAGCCTCTCAGGAAGCCGCGAGTCTCGTAGTGAACATATAA"
+      "TGCGACGTAATG");
+  snprintf(text,sizeof(text),
+      "TCACTGTTGAACGGACGCTCGAGCAAAAGAATAGGGATAGGACGATGGCGCTCCGG"
+      "TGCTCTCCCCCTAGCCTCTCAGGAAGCCGCGAGTCTCGTAGTGAACATATAATGCG"
+      "ACGTAATGCAGA");
+  failed |= check_default_score_only_affine2p_case(&combined,pattern,text,0);
 
   const endsfree_case_t empty_text_pattern_end = {
       "empty-text-pattern-end",0,1,0,0
