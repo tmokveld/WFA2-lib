@@ -13,6 +13,7 @@ INPUT="$SCRIPT_DIR/wfa.utest.seq"
 WORKDIR="$(mktemp -d "${TMPDIR:-/tmp}/wfa.singletrack.XXXXXX")"
 ENDSFREE_INPUT="$WORKDIR/endsfree.seq"
 EXTENSION_INPUT="$WORKDIR/extension.seq"
+BANDED_INPUT="$WORKDIR/banded.seq"
 
 BIN="${1:-}/align_benchmark"
 if [[ ! -f "$BIN" ]]; then
@@ -42,6 +43,15 @@ cat > "$EXTENSION_INPUT" <<'EOF'
 <ACGTACGTTTTT
 >TTTTAAAACCCC
 <TTTTAAAAGGGG
+EOF
+
+cat > "$BANDED_INPUT" <<'EOF'
+>ACGTACGT
+<ACGTTACGT
+>AAAACCCCGGGG
+<AAAACCCCGGGG
+>GATTACA
+<GATTTACA
 EOF
 
 compare_scores() {
@@ -86,6 +96,14 @@ run_span_heuristic_cases() {
       "$span_arg" "--wfa-heuristic=wfa-adaptive" "--wfa-heuristic-parameters=10,50,1"
   run_case_input "affine2p.$span_name.wfadaptive" "$input" "gap-affine2p-wfa" \
       "$span_arg" "--wfa-heuristic=wfa-adaptive" "--wfa-heuristic-parameters=10,50,1"
+  run_case_input "affine.$span_name.banded-static" "$input" "gap-affine-wfa" \
+      "$span_arg" "--wfa-heuristic=banded-static" "--wfa-heuristic-parameters=-16,16"
+  run_case_input "affine2p.$span_name.banded-static" "$input" "gap-affine2p-wfa" \
+      "$span_arg" "--wfa-heuristic=banded-static" "--wfa-heuristic-parameters=-16,16"
+  run_case_input "affine.$span_name.banded-adaptive" "$input" "gap-affine-wfa" \
+      "$span_arg" "--wfa-heuristic=banded-adaptive" "--wfa-heuristic-parameters=-16,16,1"
+  run_case_input "affine2p.$span_name.banded-adaptive" "$input" "gap-affine2p-wfa" \
+      "$span_arg" "--wfa-heuristic=banded-adaptive" "--wfa-heuristic-parameters=-16,16,1"
   run_case_input "affine.$span_name.xdrop" "$input" "gap-affine-wfa" \
       "$span_arg" "--wfa-heuristic=xdrop" "--wfa-heuristic-parameters=10,1"
   run_case_input "affine2p.$span_name.xdrop" "$input" "gap-affine2p-wfa" \
@@ -112,12 +130,34 @@ run_case "affine.xdrop" "gap-affine-wfa" \
     "--wfa-heuristic=xdrop" "--wfa-heuristic-parameters=10,1"
 run_case "affine.zdrop" "gap-affine-wfa" \
     "--wfa-heuristic=zdrop" "--wfa-heuristic-parameters=10,1"
+run_case_input "affine.banded-static" "$BANDED_INPUT" "gap-affine-wfa" \
+    "--wfa-heuristic=banded-static" "--wfa-heuristic-parameters=-16,16"
+run_case_input "affine.banded-adaptive" "$BANDED_INPUT" "gap-affine-wfa" \
+    "--wfa-heuristic=banded-adaptive" "--wfa-heuristic-parameters=-16,16,1"
+run_case_input "affine2p.banded-static" "$BANDED_INPUT" "gap-affine2p-wfa" \
+    "--wfa-heuristic=banded-static" "--wfa-heuristic-parameters=-16,16"
+run_case_input "affine2p.banded-adaptive" "$BANDED_INPUT" "gap-affine2p-wfa" \
+    "--wfa-heuristic=banded-adaptive" "--wfa-heuristic-parameters=-16,16,1"
+run_case_input "affine.banded-static.negmatch" "$BANDED_INPUT" "gap-affine-wfa" \
+    "--affine-penalties=-5,1,2,1" \
+    "--wfa-heuristic=banded-static" "--wfa-heuristic-parameters=-16,16"
+run_case_input "affine2p.banded-adaptive.negmatch" "$BANDED_INPUT" "gap-affine2p-wfa" \
+    "--affine2p-penalties=-5,1,2,1,5,1" \
+    "--wfa-heuristic=banded-adaptive" "--wfa-heuristic-parameters=-16,16,1"
+run_case_input "affine.banded-static.unreachable" "$BANDED_INPUT" "gap-affine-wfa" \
+    "--wfa-heuristic=banded-static" "--wfa-heuristic-parameters=5,5"
 run_case_input "affine.endsfree" "$ENDSFREE_INPUT" "gap-affine-wfa" "--wfa-span=ends-free,4,4,4,4"
 run_case_input "affine2p.endsfree" "$ENDSFREE_INPUT" "gap-affine2p-wfa" "--wfa-span=ends-free,4,4,4,4"
 run_case_input "affine.endsfree.negmatch" "$ENDSFREE_INPUT" "gap-affine-wfa" \
     "--wfa-span=ends-free,4,4,4,4" "--affine-penalties=-5,1,2,1"
 run_case_input "affine2p.endsfree.negmatch" "$ENDSFREE_INPUT" "gap-affine2p-wfa" \
     "--wfa-span=ends-free,4,4,4,4" "--affine2p-penalties=-5,1,2,1,5,1"
+run_case_input "affine.endsfree.banded-static.negmatch" "$ENDSFREE_INPUT" "gap-affine-wfa" \
+    "--wfa-span=ends-free,4,4,4,4" "--affine-penalties=-5,1,2,1" \
+    "--wfa-heuristic=banded-static" "--wfa-heuristic-parameters=-16,16"
+run_case_input "affine2p.endsfree.banded-adaptive.negmatch" "$ENDSFREE_INPUT" "gap-affine2p-wfa" \
+    "--wfa-span=ends-free,4,4,4,4" "--affine2p-penalties=-5,1,2,1,5,1" \
+    "--wfa-heuristic=banded-adaptive" "--wfa-heuristic-parameters=-16,16,1"
 run_span_heuristic_cases "endsfree" "$ENDSFREE_INPUT" "--wfa-span=ends-free,4,4,4,4"
 run_case_input "affine.extension" "$EXTENSION_INPUT" "gap-affine-wfa" "--wfa-span=extension"
 run_case_input "affine2p.extension" "$EXTENSION_INPUT" "gap-affine2p-wfa" "--wfa-span=extension"
@@ -125,6 +165,12 @@ run_case_input "affine.extension.negmatch" "$EXTENSION_INPUT" "gap-affine-wfa" \
     "--wfa-span=extension" "--affine-penalties=-5,1,2,1"
 run_case_input "affine2p.extension.negmatch" "$EXTENSION_INPUT" "gap-affine2p-wfa" \
     "--wfa-span=extension" "--affine2p-penalties=-5,1,2,1,5,1"
+run_case_input "affine.extension.banded-static.negmatch" "$EXTENSION_INPUT" "gap-affine-wfa" \
+    "--wfa-span=extension" "--affine-penalties=-5,1,2,1" \
+    "--wfa-heuristic=banded-static" "--wfa-heuristic-parameters=-16,16"
+run_case_input "affine2p.extension.banded-adaptive.negmatch" "$EXTENSION_INPUT" "gap-affine2p-wfa" \
+    "--wfa-span=extension" "--affine2p-penalties=-5,1,2,1,5,1" \
+    "--wfa-heuristic=banded-adaptive" "--wfa-heuristic-parameters=-16,16,1"
 run_span_heuristic_cases "extension" "$EXTENSION_INPUT" "--wfa-span=extension"
 
 "$SCRIPT_DIR/wfa.singletrack.proof.py" "$BIN"
@@ -141,9 +187,5 @@ expect_reject() {
 expect_reject "score-only" -a gap-affine-wfa --wfa-memory=singletrack --wfa-score-only
 expect_reject "edit" -a edit-wfa --wfa-memory=singletrack
 expect_reject "lambda" -a gap-affine-wfa --wfa-memory=singletrack --wfa-lambda
-expect_reject "banded-static" -a gap-affine-wfa --wfa-memory=singletrack \
-    --wfa-heuristic=banded-static --wfa-heuristic-parameters=-10,10
-expect_reject "banded-adaptive" -a gap-affine-wfa --wfa-memory=singletrack \
-    --wfa-heuristic=banded-adaptive --wfa-heuristic-parameters=-10,10,1
 
 echo ">>> Singletrack tests passed ($WORKDIR)"

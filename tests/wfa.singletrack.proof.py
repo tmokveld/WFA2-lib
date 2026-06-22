@@ -94,14 +94,14 @@ SUPPORTED_HEURISTIC_CONFIGS = [
     ),
 ]
 
-UNSUPPORTED_SINGLETRACK_HEURISTIC_CONFIGS = [
+BANDED_HEURISTIC_CONFIGS = [
     (
         "banded-static",
-        ["--wfa-heuristic=banded-static", "--wfa-heuristic-parameters=-10,10"],
+        ["--wfa-heuristic=banded-static", "--wfa-heuristic-parameters=-16,16"],
     ),
     (
         "banded-adaptive",
-        ["--wfa-heuristic=banded-adaptive", "--wfa-heuristic-parameters=-10,10,1"],
+        ["--wfa-heuristic=banded-adaptive", "--wfa-heuristic-parameters=-16,16,1"],
     ),
 ]
 
@@ -131,10 +131,19 @@ def find_align_benchmark(argv: list[str]) -> Path:
             return candidate
     script_dir = Path(__file__).resolve().parent
     root = script_dir.parent
-    for candidate in (root / "bin" / "align_benchmark", root / "build" / "align_benchmark"):
+    candidates = (
+        root / "build-cmake-benchmark-native" / "align_benchmark",
+        root / "build-cmake-benchmark" / "align_benchmark",
+        root / "build" / "align_benchmark",
+        root / "bin" / "align_benchmark",
+    )
+    for candidate in candidates:
         if candidate.is_file():
             return candidate
-    raise SystemExit("[Error] Binaries not built. Please run cmake or make")
+    raise SystemExit(
+        "[Error] Binaries not built. Please run cmake or make. Checked: "
+        + ", ".join(str(candidate) for candidate in candidates)
+    )
 
 
 def random_dna(rng: random.Random, length: int) -> str:
@@ -662,7 +671,7 @@ def run_align_benchmark(
     completed = subprocess.run(cmd, cwd=align_benchmark.parents[1], text=True, capture_output=True)
     if completed.returncode != 0:
         raise RuntimeError(
-            "align_benchmark failed:\n"
+            f"align_benchmark failed with exit code {completed.returncode}:\n"
             + " ".join(cmd)
             + "\n\n"
             + completed.stdout
@@ -692,43 +701,6 @@ def heuristic_configs_for_penalties(
     if penalties["match"] == 0:
         return [NO_HEURISTIC_CONFIG, *SUPPORTED_HEURISTIC_CONFIGS]
     return [NO_HEURISTIC_CONFIG]
-
-
-def reject_singletrack_config(
-    align_benchmark: Path,
-    workdir: Path,
-    name: str,
-    extra_args: list[str],
-) -> None:
-    pairs = [("ACGTACGT", "ACGTTACGT")]
-    input_path = workdir / f"reject.{name}.seq"
-    output_path = workdir / f"reject.{name}.alg"
-    write_pairs(input_path, pairs)
-    cmd = [
-        str(align_benchmark),
-        "--input",
-        str(input_path),
-        "--output-full",
-        str(output_path),
-        "--algorithm",
-        "gap-affine-wfa",
-        "--wfa-memory=singletrack",
-        *extra_args,
-    ]
-    completed = subprocess.run(cmd, cwd=align_benchmark.parents[1], text=True, capture_output=True)
-    if completed.returncode == 0:
-        raise AssertionError(
-            "Singletrack accepted unsupported heuristic configuration:\n"
-            + " ".join(cmd)
-        )
-    message = completed.stdout + completed.stderr
-    if "Singletrack" not in message or "banded" not in message:
-        raise AssertionError(
-            "Singletrack rejected unsupported heuristic with an unexpected message:\n"
-            + " ".join(cmd)
-            + "\n\n"
-            + message
-        )
 
 
 def fail_with_replay(
@@ -967,10 +939,138 @@ def check_extension(align_benchmark: Path, workdir: Path) -> None:
                         )
 
 
-def check_unsupported_heuristics(align_benchmark: Path, workdir: Path) -> None:
-    for label, heuristic_args in UNSUPPORTED_SINGLETRACK_HEURISTIC_CONFIGS:
-        print(f">>> Proving Singletrack rejects {label}")
-        reject_singletrack_config(align_benchmark, workdir, label, heuristic_args)
+def check_banded_heuristics(align_benchmark: Path, workdir: Path) -> None:
+    endsfree_span = "ends-free,4,4,4,4"
+    endsfree_free_ends = (4, 4, 4, 4)
+    endsfree_banded_pairs = [
+        ("AAAACCCCGGGG", "TTTTAAAACCCCGGGGAAAA"),
+        ("AAAACCCCGGGGTTTT", "GGGGAAAACCCCGGGG"),
+        ("CCCCAAAAGGGG", "AAAAGGGGTTTT"),
+    ]
+    extension_banded_pairs = [
+        ("AAAACCCCGGGGTTTT", "AAAACCCCGGGGAAAA"),
+        ("ACGTACGTGGGG", "ACGTACGTTTTT"),
+        ("TTTTAAAACCCC", "TTTTAAAAGGGG"),
+    ]
+
+    for label, algorithm, extra_args, penalties in PENALTY_CONFIGS:
+        if penalties["match"] != 0:
+            continue
+        for heuristic_label, heuristic_args in BANDED_HEURISTIC_CONFIGS:
+            config_label = f"{label}.{heuristic_label}"
+            combined_args = [*extra_args, *heuristic_args]
+
+            print(f">>> Proving Singletrack ends-free {config_label}")
+            high = run_align_benchmark(
+                align_benchmark,
+                workdir,
+                f"banded.endsfree.{config_label}",
+                endsfree_banded_pairs,
+                algorithm,
+                "high",
+                endsfree_span,
+                combined_args,
+            )
+            singletrack = run_align_benchmark(
+                align_benchmark,
+                workdir,
+                f"banded.endsfree.{config_label}",
+                endsfree_banded_pairs,
+                algorithm,
+                "singletrack",
+                endsfree_span,
+                combined_args,
+            )
+            for idx, (high_row, singletrack_row) in enumerate(
+                zip(high.rows, singletrack.rows), start=1
+            ):
+                if skip_unreachable_row(
+                    f"ends-free {config_label}",
+                    high,
+                    singletrack,
+                    idx,
+                    high_row,
+                    singletrack_row,
+                ):
+                    continue
+                pattern = high_row.pattern
+                text = high_row.text
+                high_cigar = high_row.cigar
+                singletrack_cigar = singletrack_row.cigar
+                baseline = cigar_endsfree_score(
+                    pattern, text, high_cigar, penalties, endsfree_free_ends
+                )
+                observed = cigar_endsfree_score(
+                    pattern, text, singletrack_cigar, penalties, endsfree_free_ends
+                )
+                if observed != baseline:
+                    fail_with_replay(
+                        f"ends-free {config_label} case {idx} differs from high-memory WFA",
+                        high,
+                        singletrack,
+                        idx,
+                        pattern,
+                        text,
+                        high_cigar,
+                        singletrack_cigar,
+                        observed,
+                        baseline,
+                    )
+
+            print(f">>> Proving Singletrack extension {config_label}")
+            high = run_align_benchmark(
+                align_benchmark,
+                workdir,
+                f"banded.extension.{config_label}",
+                extension_banded_pairs,
+                algorithm,
+                "high",
+                "extension",
+                combined_args,
+            )
+            singletrack = run_align_benchmark(
+                align_benchmark,
+                workdir,
+                f"banded.extension.{config_label}",
+                extension_banded_pairs,
+                algorithm,
+                "singletrack",
+                "extension",
+                combined_args,
+            )
+            for idx, (high_row, singletrack_row) in enumerate(
+                zip(high.rows, singletrack.rows), start=1
+            ):
+                if skip_unreachable_row(
+                    f"extension {config_label}",
+                    high,
+                    singletrack,
+                    idx,
+                    high_row,
+                    singletrack_row,
+                ):
+                    continue
+                pattern = high_row.pattern
+                text = high_row.text
+                high_cigar = high_row.cigar
+                singletrack_cigar = singletrack_row.cigar
+                baseline = cigar_extension_score(pattern, text, high_cigar, penalties)
+                observed = cigar_extension_score(
+                    pattern, text, singletrack_cigar, penalties
+                )
+                if observed != baseline:
+                    fail_with_replay(
+                        f"extension {config_label} case {idx} differs from high-memory WFA",
+                        high,
+                        singletrack,
+                        idx,
+                        pattern,
+                        text,
+                        high_cigar,
+                        singletrack_cigar,
+                        observed,
+                        baseline,
+                    )
 
 
 def main(argv: list[str]) -> int:
@@ -979,7 +1079,7 @@ def main(argv: list[str]) -> int:
     try:
         check_endsfree(align_benchmark, workdir)
         check_extension(align_benchmark, workdir)
-        check_unsupported_heuristics(align_benchmark, workdir)
+        check_banded_heuristics(align_benchmark, workdir)
         print(f">>> Singletrack proof tests passed ({workdir})")
     except Exception:
         print(f">>> Singletrack proof temp files preserved at {workdir}", file=sys.stderr)

@@ -197,6 +197,60 @@ static int check_combined_wfa_wfmash(
       label,wf_aligner,wf_heuristic_wfadaptive|wf_heuristic_wfmash,10,50,1);
 }
 
+static void configure_banded_static(
+    wavefront_aligner_t* const wf_aligner) {
+  wavefront_aligner_set_heuristic_banded_static(wf_aligner,-16,16);
+}
+
+static int check_banded_static(
+    const char* const label,
+    wavefront_aligner_t* const wf_aligner) {
+  if (wf_aligner->heuristic.strategy != wf_heuristic_banded_static) {
+    fprintf(stderr,"%s banded-static strategy mismatch: observed=%lu expected=%lu\n",
+        label,
+        (unsigned long)wf_aligner->heuristic.strategy,
+        (unsigned long)wf_heuristic_banded_static);
+    return 1;
+  }
+  if (wf_aligner->heuristic.min_k != -16 ||
+      wf_aligner->heuristic.max_k != 16) {
+    fprintf(stderr,"%s banded-static parameter mismatch: observed=(%d,%d) expected=(-16,16)\n",
+        label,
+        wf_aligner->heuristic.min_k,
+        wf_aligner->heuristic.max_k);
+    return 1;
+  }
+  return 0;
+}
+
+static void configure_banded_adaptive(
+    wavefront_aligner_t* const wf_aligner) {
+  wavefront_aligner_set_heuristic_banded_adaptive(wf_aligner,-16,16,1);
+}
+
+static int check_banded_adaptive(
+    const char* const label,
+    wavefront_aligner_t* const wf_aligner) {
+  if (wf_aligner->heuristic.strategy != wf_heuristic_banded_adaptive) {
+    fprintf(stderr,"%s banded-adaptive strategy mismatch: observed=%lu expected=%lu\n",
+        label,
+        (unsigned long)wf_aligner->heuristic.strategy,
+        (unsigned long)wf_heuristic_banded_adaptive);
+    return 1;
+  }
+  if (wf_aligner->heuristic.min_k != -16 ||
+      wf_aligner->heuristic.max_k != 16 ||
+      wf_aligner->heuristic.steps_between_cutoffs != 1) {
+    fprintf(stderr,"%s banded-adaptive parameter mismatch: observed=(%d,%d,%d) expected=(-16,16,1)\n",
+        label,
+        wf_aligner->heuristic.min_k,
+        wf_aligner->heuristic.max_k,
+        wf_aligner->heuristic.steps_between_cutoffs);
+    return 1;
+  }
+  return 0;
+}
+
 static void configure_xdrop(
     wavefront_aligner_t* const wf_aligner) {
   wavefront_aligner_set_heuristic_xdrop(wf_aligner,100,1);
@@ -493,6 +547,12 @@ static int check_span_suite(
       "affine-wfmash",gap_affine,
       configure_wfmash,check_wfmash);
   CHECK_SPAN_CASE(
+      "affine-banded-static",gap_affine,
+      configure_banded_static,check_banded_static);
+  CHECK_SPAN_CASE(
+      "affine-banded-adaptive",gap_affine,
+      configure_banded_adaptive,check_banded_adaptive);
+  CHECK_SPAN_CASE(
       "affine-xdrop",gap_affine,
       configure_xdrop,check_xdrop);
   CHECK_SPAN_CASE(
@@ -504,6 +564,12 @@ static int check_span_suite(
   CHECK_SPAN_CASE(
       "affine2p-wfmash",gap_affine_2p,
       configure_wfmash,check_wfmash);
+  CHECK_SPAN_CASE(
+      "affine2p-banded-static",gap_affine_2p,
+      configure_banded_static,check_banded_static);
+  CHECK_SPAN_CASE(
+      "affine2p-banded-adaptive",gap_affine_2p,
+      configure_banded_adaptive,check_banded_adaptive);
   CHECK_SPAN_CASE(
       "affine2p-xdrop",gap_affine_2p,
       configure_xdrop,check_xdrop);
@@ -523,6 +589,18 @@ int main(void) {
   failed |= check_case(
       "combined-wfa-wfmash",gap_affine,
       configure_combined_wfa_wfmash,check_combined_wfa_wfmash);
+  failed |= check_case(
+      "banded-static",gap_affine,
+      configure_banded_static,check_banded_static);
+  failed |= check_case(
+      "banded-adaptive",gap_affine,
+      configure_banded_adaptive,check_banded_adaptive);
+  failed |= check_case(
+      "affine2p-banded-static",gap_affine_2p,
+      configure_banded_static,check_banded_static);
+  failed |= check_case(
+      "affine2p-banded-adaptive",gap_affine_2p,
+      configure_banded_adaptive,check_banded_adaptive);
   failed |= check_case("xdrop",gap_affine,configure_xdrop,check_xdrop);
   failed |= check_case_sequences(
       "zdrop-partial",gap_affine,configure_zdrop,check_zdrop,
