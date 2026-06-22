@@ -117,7 +117,14 @@ def find_align_benchmark(argv: list[str]) -> Path:
         if candidate.is_file():
             return candidate.resolve()
     root = Path(__file__).resolve().parent.parent
-    for candidate in (root / "bin" / "align_benchmark", root / "build" / "align_benchmark"):
+    candidates = [
+        root / "build-cmake-benchmark-native" / "align_benchmark",
+        root / "build-cmake-benchmark" / "align_benchmark",
+        root / "build-cmake" / "align_benchmark",
+        root / "build" / "align_benchmark",
+        root / "bin" / "align_benchmark",
+    ]
+    for candidate in candidates:
         if candidate.is_file():
             return candidate.resolve()
     raise SystemExit("[Error] Binaries not built. Please run cmake or make")

@@ -385,6 +385,21 @@ int main(void) {
   };
   failed |= check_biwfa_endpoint_case(&combined,pattern,text);
 
+  const endsfree_case_t empty_text_pattern_end = {
+      "empty-text-pattern-end",0,1,0,0
+  };
+  failed |= check_biwfa_endpoint_case(&empty_text_pattern_end,"A","");
+
+  const endsfree_case_t empty_pattern_text_end = {
+      "empty-pattern-text-end",0,0,0,1
+  };
+  failed |= check_biwfa_endpoint_case(&empty_pattern_text_end,"","A");
+
+  const endsfree_case_t both_empty = {
+      "both-empty",0,0,0,0
+  };
+  failed |= check_biwfa_endpoint_case(&both_empty,"","");
+
   failed |= check_global_endpoint();
   return failed;
 }

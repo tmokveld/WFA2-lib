@@ -1320,13 +1320,8 @@ int wavefront_bialign_alignment(
   const int pattern_length = pattern_end - pattern_begin;
   const int text_length = text_end - text_begin;
   // Trivial cases
-  if (text_length == 0) {
-    cigar_append_deletion(wf_aligner->cigar,pattern_length);
-    return WF_STATUS_OK;
-  } else if (pattern_length == 0) {
-    cigar_append_insertion(wf_aligner->cigar,text_length);
-    return WF_STATUS_OK;
-  } else if (score_remaining <= WF_BIALIGN_FALLBACK_MIN_SCORE) {
+  if (text_length == 0 || pattern_length == 0 ||
+      score_remaining <= WF_BIALIGN_FALLBACK_MIN_SCORE) {
     // Fall back to regular WFA
     return wavefront_bialign_base(wf_aligner,form,
         component_begin,component_end,align_level);
@@ -1467,6 +1462,11 @@ void wavefront_bialign(
         &wf_aligner->alignment_form,
         affine2p_matrix_M,affine2p_matrix_M,
         min_length ? 0 : INT_MAX,0);
+    if (align_status == WF_STATUS_OK) {
+      wavefront_bialign_set_cigar_end_position(
+          wf_aligner->cigar,&wf_aligner->alignment_form,
+          pattern_length,text_length);
+    }
   }
   // Check status
   if (align_status == WF_STATUS_OK) {
