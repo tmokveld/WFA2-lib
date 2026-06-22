@@ -1209,6 +1209,11 @@ static void wavefront_bialign_set_cigar_end_position(
     alignment_form_t* const form,
     const int pattern_length,
     const int text_length) {
+  if (!wavefront_bialign_form_has_end_free(form)) {
+    cigar->end_v = pattern_length;
+    cigar->end_h = text_length;
+    return;
+  }
   int v = 0, h = 0, i;
   for (i=cigar->begin_offset;i<cigar->end_offset;++i) {
     switch (cigar->operations[i]) {
@@ -1228,10 +1233,6 @@ static void wavefront_bialign_set_cigar_end_position(
   }
   cigar->end_v = v;
   cigar->end_h = h;
-  if (form->span != alignment_endsfree ||
-      (form->pattern_end_free == 0 && form->text_end_free == 0)) {
-    return;
-  }
   for (i=cigar->end_offset-1;i>=cigar->begin_offset;--i) {
     switch (cigar->operations[i]) {
       case 'I':
@@ -1401,8 +1402,6 @@ int wavefront_bialign_alignment(
   if (align_level == 0) {
     cigar_t* const cigar = wf_aligner->cigar;
     cigar->score = wavefront_compute_classic_score(wf_aligner,pattern_length,text_length,breakpoint.score);
-    wavefront_bialign_set_cigar_end_position(
-        cigar,form,pattern_length,text_length);
   }
   return WF_STATUS_OK; // All good
 }
@@ -1426,7 +1425,8 @@ int wavefront_bialign_compute_score(
           form->pattern_end_free > 0 ||
           form->text_begin_free > 0 ||
           form->text_end_free > 0);
-  if (ends_free && wf_aligner->penalties.match == 0) {
+  if (ends_free && wf_aligner->penalties.match == 0 &&
+      wavefront_bialign_form_has_end_free(form)) {
     wf_bialign_score_result_t result;
     const int align_status = wavefront_bialign_compute_score_recursive(wf_aligner,
         form,affine2p_matrix_M,affine2p_matrix_M,INT_MAX,0,&result);
