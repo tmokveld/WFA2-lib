@@ -88,19 +88,7 @@ void wavefront_align_presets__checks(
    * Checks
    */
   if (wf_aligner->bialigner != NULL) {
-    const bool ends_free =
-        form->pattern_begin_free > 0 ||
-        form->pattern_end_free > 0 ||
-        form->text_begin_free > 0 ||
-        form->text_end_free > 0;
-    if (ends_free) {
-      fprintf(stderr,"[WFA] BiWFA ends-free has not been tested properly yet (let me know and I'll do it)\n");
-      exit(1);
-    }
-    if (wf_aligner->alignment_form.extension) {
-      fprintf(stderr,"[WFA] BiWFA extension is not implemented yet (let me know and I'll add it)\n");
-      exit(1);
-    }
+    wavefront_aligner_check_biwfa_unsupported(wf_aligner);
   }
   const bool is_heuristic_drop =
       (wf_aligner->heuristic.strategy & wf_heuristic_xdrop) ||

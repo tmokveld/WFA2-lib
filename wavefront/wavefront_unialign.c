@@ -177,9 +177,16 @@ void wavefront_unialign_terminate(
   if (wf_aligner->alignment_scope == compute_score) {
     // Set end-alignment position & score
     if (align_status->status == WF_STATUS_END_REACHED) {
-      cigar->end_v = pattern_length;
-      cigar->end_h = text_length;
-      cigar->score = wavefront_compute_classic_score(wf_aligner,pattern_length,text_length,alignment_score);
+      const int k = wf_aligner->alignment_end_pos.k;
+      const int offset = wf_aligner->alignment_end_pos.offset;
+      if (offset != WAVEFRONT_OFFSET_NULL) {
+        cigar->end_v = WAVEFRONT_V(k,offset);
+        cigar->end_h = WAVEFRONT_H(k,offset);
+      } else {
+        cigar->end_v = pattern_length;
+        cigar->end_h = text_length;
+      }
+      cigar->score = wavefront_compute_classic_score(wf_aligner,cigar->end_v,cigar->end_h,alignment_score);
       align_status->status = WF_STATUS_ALG_COMPLETED;
     } else {
       const int k = wf_aligner->alignment_end_pos.k;

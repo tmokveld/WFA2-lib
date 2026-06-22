@@ -189,7 +189,14 @@ checkout branch `benchmark`.
 
 ```                                                                  
           --wfa-memory high|med|low|ultralow|singletrack
-            Selects the WFA memory mode. The singletrack mode is available for full-scope
+            Selects the WFA memory mode. The ultralow mode uses BiWFA and supports
+            end-to-end alignment plus ordinary ends-free alignment for zero-match
+            scoring in score-only scope and full-CIGAR alignment. Ultralow ends-free
+            alignments with negative match rewards are rejected until aligned-length-aware
+            breakpoint scoring is available. Ultralow extension mode remains unsupported.
+            Supported ultralow ends-free results are optimal legal alignments, but their
+            CIGAR or endpoint tie-breaking can differ from high-memory WFA.
+            The singletrack mode is available for full-scope
             global, ends-free, and extension gap-affine and dual gap-affine WFA alignments,
             including non-banded heuristic modes. Heuristic-enabled Singletrack alignments
             return a CIGAR consistent with the heuristic result, not necessarily a globally

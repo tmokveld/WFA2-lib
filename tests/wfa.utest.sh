@@ -13,6 +13,27 @@ LOG="$PREFIX/wfa.utest.log"
 
 CMP_SCORE=$(readlink -f "$PREFIX/../scripts/wfa.alg.cmp.score.sh")
 
+TIME_CMD=()
+if command -v gtime >/dev/null 2>&1
+then
+    TIME_CMD=(gtime -v)
+elif /usr/bin/time -v true >/dev/null 2>&1
+then
+    TIME_CMD=(/usr/bin/time -v)
+fi
+
+function run_benchmark() {
+    if [[ ${#TIME_CMD[@]} -gt 0 ]]
+    then
+        "${TIME_CMD[@]}" "$@" >> $LOG 2>&1
+    else
+        "$@" >> $LOG 2>&1
+        local status=$?
+        echo -e "\tExit status: $status" >> $LOG
+        return $status
+    fi
+}
+
 BIN=$1/align_benchmark
 if [ ! -f "$BIN" ]
 then
@@ -44,23 +65,23 @@ do
     echo ">>> Testing '$NAME' ($MODE)"
 
     # Testing distance functions
-    \time -v $BIN -i $INPUT -o $OUTPUT/$NAME.indel.alg    -a indel-wfa        $MODE >> $LOG 2>&1
-    \time -v $BIN -i $INPUT -o $OUTPUT/$NAME.edit.alg     -a edit-wfa         $MODE >> $LOG 2>&1
-    \time -v $BIN -i $INPUT -o $OUTPUT/$NAME.affine.alg   -a gap-affine-wfa   $MODE >> $LOG 2>&1
-    \time -v $BIN -i $INPUT -o $OUTPUT/$NAME.affine2p.alg -a gap-affine2p-wfa $MODE >> $LOG 2>&1
+    run_benchmark $BIN -i $INPUT -o $OUTPUT/$NAME.indel.alg    -a indel-wfa        $MODE
+    run_benchmark $BIN -i $INPUT -o $OUTPUT/$NAME.edit.alg     -a edit-wfa         $MODE
+    run_benchmark $BIN -i $INPUT -o $OUTPUT/$NAME.affine.alg   -a gap-affine-wfa   $MODE
+    run_benchmark $BIN -i $INPUT -o $OUTPUT/$NAME.affine2p.alg -a gap-affine2p-wfa $MODE
 
     # Testing penalty-scores
-    \time -v $BIN -i $INPUT -o $OUTPUT/$NAME.affine.p0.alg -a gap-affine-wfa $MODE --affine-penalties="0,1,2,1" >> $LOG 2>&1
-    \time -v $BIN -i $INPUT -o $OUTPUT/$NAME.affine.p1.alg -a gap-affine-wfa $MODE --affine-penalties="0,3,1,4" >> $LOG 2>&1
-    \time -v $BIN -i $INPUT -o $OUTPUT/$NAME.affine.p2.alg -a gap-affine-wfa $MODE --affine-penalties="0,5,3,2" >> $LOG 2>&1
+    run_benchmark $BIN -i $INPUT -o $OUTPUT/$NAME.affine.p0.alg -a gap-affine-wfa $MODE --affine-penalties="0,1,2,1"
+    run_benchmark $BIN -i $INPUT -o $OUTPUT/$NAME.affine.p1.alg -a gap-affine-wfa $MODE --affine-penalties="0,3,1,4"
+    run_benchmark $BIN -i $INPUT -o $OUTPUT/$NAME.affine.p2.alg -a gap-affine-wfa $MODE --affine-penalties="0,5,3,2"
 
-    \time -v $BIN -i $INPUT -o $OUTPUT/$NAME.affine.p3.alg -a gap-affine-wfa $MODE --affine-penalties="-5,1,2,1" >> $LOG 2>&1
-    \time -v $BIN -i $INPUT -o $OUTPUT/$NAME.affine.p4.alg -a gap-affine-wfa $MODE --affine-penalties="-2,3,1,4" >> $LOG 2>&1
-    \time -v $BIN -i $INPUT -o $OUTPUT/$NAME.affine.p5.alg -a gap-affine-wfa $MODE --affine-penalties="-3,5,3,2" >> $LOG 2>&1
+    run_benchmark $BIN -i $INPUT -o $OUTPUT/$NAME.affine.p3.alg -a gap-affine-wfa $MODE --affine-penalties="-5,1,2,1"
+    run_benchmark $BIN -i $INPUT -o $OUTPUT/$NAME.affine.p4.alg -a gap-affine-wfa $MODE --affine-penalties="-2,3,1,4"
+    run_benchmark $BIN -i $INPUT -o $OUTPUT/$NAME.affine.p5.alg -a gap-affine-wfa $MODE --affine-penalties="-3,5,3,2"
 
     # Heuristics
-    \time -v $BIN -i $INPUT -o $OUTPUT/$NAME.affine.wfapt0.alg -a gap-affine-wfa $MODE --wfa-heuristic=wfa-adaptive --wfa-heuristic-parameters=10,50,1 >> $LOG 2>&1
-    \time -v $BIN -i $INPUT -o $OUTPUT/$NAME.affine.wfapt1.alg -a gap-affine-wfa $MODE --wfa-heuristic=wfa-adaptive --wfa-heuristic-parameters=10,50,10 >> $LOG 2>&1
+    run_benchmark $BIN -i $INPUT -o $OUTPUT/$NAME.affine.wfapt0.alg -a gap-affine-wfa $MODE --wfa-heuristic=wfa-adaptive --wfa-heuristic-parameters=10,50,1
+    run_benchmark $BIN -i $INPUT -o $OUTPUT/$NAME.affine.wfapt1.alg -a gap-affine-wfa $MODE --wfa-heuristic=wfa-adaptive --wfa-heuristic-parameters=10,50,10
 done
 
 # Intra-tests
@@ -101,7 +122,7 @@ echo ">>> Performance Mem (KB) [base vs new]: "
 paste <(tail -n 4 $OUTPUT/wfa.utest.check/wfa.utest.log.mem) <(tail -n 4 $OUTPUT/wfa.utest.log.mem)
 
 # Display correct
-./tests/wfa.utest.cmp.sh $OUTPUT $OUTPUT/wfa.utest.check
+$PREFIX/wfa.utest.cmp.sh $OUTPUT $OUTPUT/wfa.utest.check
 STATUS=$?
 STATUS_EXIT=$(grep "Exit status:" $LOG | grep -v "Exit status: 0" | sort | uniq -c | tr '\n' ' ')
 STATUS_SIGNAL=$(grep "Command terminated by signal" $LOG | sort | uniq -c | tr '\n' ' ')

@@ -116,6 +116,7 @@ typedef struct {
   // Distance model
   distance_metric_t distance_metric;       // Alignment metric/distance used
   alignment_scope_t alignment_scope;       // Alignment scope (score only or full-CIGAR)
+  bool score_only_recover_endpoints;        // Recover endpoint coordinates in score-only mode
   alignment_form_t alignment_form;         // Alignment mode (end-to-end/ends-free)
   // Penalties
   linear_penalties_t linear_penalties;     // Gap-linear penalties (placeholder)
