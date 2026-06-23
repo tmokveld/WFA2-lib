@@ -317,6 +317,43 @@ add_test(
   COMMAND wfa_cigar_sam_regression
 )
 
+add_executable(wfa_vector_regression
+  tests/wfa_vector_regression.c
+)
+target_link_libraries(wfa_vector_regression wfa2_static m)
+add_test(
+  NAME wfa_vector_regression
+  COMMAND wfa_vector_regression
+)
+
+add_executable(wfa_vector_debug_regression
+  tests/wfa_vector_debug_regression.c
+  utils/vector.c
+)
+target_compile_definitions(wfa_vector_debug_regression PRIVATE VECTOR_DEBUG)
+target_include_directories(wfa_vector_debug_regression PUBLIC . utils)
+target_link_libraries(wfa_vector_debug_regression m)
+add_test(
+  NAME wfa_vector_debug_out_of_range
+  COMMAND wfa_vector_debug_regression out_of_range
+)
+set_tests_properties(wfa_vector_debug_out_of_range PROPERTIES WILL_FAIL TRUE)
+add_test(
+  NAME wfa_vector_debug_type_mismatch
+  COMMAND wfa_vector_debug_regression type_mismatch
+)
+set_tests_properties(wfa_vector_debug_type_mismatch PROPERTIES WILL_FAIL TRUE)
+add_test(
+  NAME wfa_vector_debug_empty_last
+  COMMAND wfa_vector_debug_regression empty_last
+)
+set_tests_properties(wfa_vector_debug_empty_last PROPERTIES WILL_FAIL TRUE)
+
+add_executable(wfa_vector_append_microbenchmark
+  tests/wfa_vector_append_microbenchmark.c
+)
+target_link_libraries(wfa_vector_append_microbenchmark wfa2_static m)
+
 add_executable(wfa_swg_endsfree_mapping_regression
   tests/wfa_swg_endsfree_mapping_regression.c
   tools/align_benchmark/benchmark/benchmark_gap_affine.c
