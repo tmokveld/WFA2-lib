@@ -136,7 +136,9 @@ void vector_reserve(
   ++((vector)->used); \
 } while (0)
 #define vector_alloc_new(vector,type,return_element_pointer) do { \
-  vector_reserve_additional((vector),1); \
+  if (VECTOR_UNLIKELY((vector)->used == (vector)->elements_allocated)) { \
+    vector_reserve((vector),(vector)->used+1,false); \
+  } \
   vector_alloc_new_unsafe((vector),type,(return_element_pointer)); \
 } while (0)
 #define vector_insert(vector,element,type) do { \
