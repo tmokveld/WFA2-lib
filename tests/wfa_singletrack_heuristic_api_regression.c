@@ -379,6 +379,7 @@ static int check_alignment_result(
     const wavefront_aligner_t* const wf_aligner,
     const char* const pattern,
     const char* const text,
+    const bool require_full_length,
     const bool check_stored_end_position) {
   if (wf_aligner->align_status.status != WF_STATUS_ALG_COMPLETED &&
       wf_aligner->align_status.status != WF_STATUS_ALG_PARTIAL) {
@@ -392,7 +393,7 @@ static int check_alignment_result(
       label,
       pattern,(int)strlen(pattern),text,(int)strlen(text),
       wf_aligner->cigar,
-      wf_aligner->align_status.status == WF_STATUS_ALG_COMPLETED,
+      require_full_length,
       check_stored_end_position);
   if (failed) {
     fprintf(stderr,"%s produced an incoherent CIGAR\n",label);
@@ -424,6 +425,7 @@ static int check_case_sequences(
     const char* const text,
     const bool expect_dropped,
     configure_span_fn configure_span,
+    const bool require_full_length,
     const bool check_end_position) {
   wavefront_aligner_t* const high = new_aligner(wavefront_memory_high,distance_metric);
   wavefront_aligner_t* const singletrack = new_aligner(wavefront_memory_singletrack,distance_metric);
@@ -495,9 +497,11 @@ static int check_case_sequences(
         singletrack->cigar->end_v,singletrack->cigar->end_h);
     failed = 1;
   }
-  failed |= check_alignment_result("high",high,pattern,text,check_end_position);
   failed |= check_alignment_result(
-      "singletrack",singletrack,pattern,text,check_end_position);
+      "high",high,pattern,text,require_full_length,check_end_position);
+  failed |= check_alignment_result(
+      "singletrack",singletrack,pattern,text,
+      require_full_length,check_end_position);
 
   wavefront_aligner_delete(high);
   wavefront_aligner_delete(singletrack);
@@ -511,7 +515,7 @@ static int check_case(
     int (*check_config)(const char* const,wavefront_aligner_t* const)) {
   return check_case_sequences(
       name,distance_metric,configure_heuristic,check_config,
-      default_pattern,default_text,false,configure_end_to_end,true);
+      default_pattern,default_text,false,configure_end_to_end,true,true);
 }
 
 static int check_span_case(
@@ -524,7 +528,7 @@ static int check_span_case(
     const char* const text) {
   return check_case_sequences(
       name,distance_metric,configure_heuristic,check_config,
-      pattern,text,false,configure_span,false);
+      pattern,text,false,configure_span,false,false);
 }
 
 static int check_span_suite(
@@ -604,7 +608,7 @@ int main(void) {
   failed |= check_case("xdrop",gap_affine,configure_xdrop,check_xdrop);
   failed |= check_case_sequences(
       "zdrop-partial",gap_affine,configure_zdrop,check_zdrop,
-      zdrop_pattern,zdrop_text,true,configure_end_to_end,true);
+      zdrop_pattern,zdrop_text,true,configure_end_to_end,false,true);
   failed |= check_span_suite(
       "endsfree",configure_endsfree,endsfree_pattern,endsfree_text);
   failed |= check_span_suite(
