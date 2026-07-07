@@ -180,13 +180,13 @@ void swg_align_endsfree(
   dp[0][0].I = AFFINE_SCORE_MAX;
   dp[0][0].M = 0;
   for (v=1;v<=pattern_length;++v) { // Init first column
-    dp[0][v].D = (v > pattern_begin_free) ? penalties->gap_opening + (v+1-pattern_begin_free)*penalties->gap_extension : 0;
+    dp[0][v].D = (v > pattern_begin_free) ? penalties->gap_opening + (v-pattern_begin_free)*penalties->gap_extension : 0;
     dp[0][v].I = AFFINE_SCORE_MAX;
     dp[0][v].M = dp[0][v].D;
   }
   for (h=1;h<=text_length;++h) { // Init first row
     dp[h][0].D = AFFINE_SCORE_MAX;
-    dp[h][0].I = (h > text_begin_free) ? penalties->gap_opening + (h+1-text_begin_free)*penalties->gap_extension : 0;
+    dp[h][0].I = (h > text_begin_free) ? penalties->gap_opening + (h-text_begin_free)*penalties->gap_extension : 0;
     dp[h][0].M = dp[h][0].I;
   }
   // Keep minimum score

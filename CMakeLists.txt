@@ -375,13 +375,10 @@ target_link_libraries(wfa_vector_append_microbenchmark wfa2_static m)
 
 add_executable(wfa_swg_endsfree_mapping_regression
   tests/wfa_swg_endsfree_mapping_regression.c
-  tools/align_benchmark/benchmark/benchmark_gap_affine.c
   tools/align_benchmark/gap_affine/swg.c
   tools/align_benchmark/gap_affine/affine_matrix.c
   alignment/cigar.c
   system/mm_allocator.c
-  system/profiler_counter.c
-  system/profiler_timer.c
   utils/commons.c
   utils/vector.c
 )
