@@ -198,7 +198,8 @@ checkout branch `benchmark`.
             CIGAR or endpoint tie-breaking can differ from high-memory WFA.
             The singletrack mode is available for full-scope
             global, ends-free, and extension gap-affine and dual gap-affine WFA alignments,
-            including WFA heuristic modes. Heuristic-enabled Singletrack alignments
+            including adaptive, drop, and banded WFA heuristic modes.
+            Heuristic-enabled Singletrack alignments
             return a CIGAR consistent with the heuristic result, not necessarily a globally
             optimal alignment.
             Singletrack directly accesses padded sequence buffers; use ASCII or packed2bits inputs.

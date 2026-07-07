@@ -1,6 +1,6 @@
 # WFA2-lib + Singletrack
 
-This version of WFA2-lib includes Singletrack for the traceback. It includes optimizations that store only a scope of the indel matrices during alignment, rather than the full matrices, for both gap-affine and dual gap-affine alignments. This integration is compatible with end-to-end, ends-free, and extension alignments using the library's singletrack memory option, including supported non-banded heuristic modes (See https://github.com/LorienLV/singletrack/ for details).
+This version of WFA2-lib includes Singletrack for the traceback. It includes optimizations that store only a scope of the indel matrices during alignment, rather than the full matrices, for both gap-affine and dual gap-affine alignments. This integration is compatible with end-to-end, ends-free, and extension alignments using the library's singletrack memory option, including the supported WFA heuristic modes (See https://github.com/LorienLV/singletrack/ for details).
 
 ## 1. INTRODUCTION
 
@@ -425,7 +425,7 @@ BiWFA intentionally rejects ordinary ends-free alignments whose normalized inter
 
 Memory mode `wavefront_memory_singletrack` enables the Singletrack traceback for full-scope end-to-end, ends-free, and extension gap-affine and dual gap-affine alignments. It stores all M wavefronts and reuses the indel wavefronts needed during computation. Without heuristics, Singletrack reconstructs an optimal CIGAR from the M wavefronts. With heuristics enabled, Singletrack reconstructs a CIGAR consistent with the heuristic result; heuristic modes can prune or drop alignment search and therefore do not guarantee global optimality.
 
-Singletrack supports the WFA-adaptive, WFMash, X-drop, and Z-drop heuristic strategies for the supported full-scope affine and dual-affine spans. Banded static and banded adaptive heuristics are not supported with Singletrack yet. It is not available for score-only scope, edit/indel/gap-linear distances, or lambda/custom sequence inputs. Singletrack follows the reference implementation and directly accesses padded sequence buffers; use ASCII or packed2bits inputs.
+Singletrack supports adaptive, drop, and banded WFA heuristic modes for the supported full-scope affine and dual-affine spans. It is not available for score-only scope, edit/indel/gap-linear distances, or lambda/custom sequence inputs. Singletrack follows the reference implementation and directly accesses padded sequence buffers; use ASCII or packed2bits inputs.
 
 Within their supported scopes, exact memory modes preserve the requested alignment score and legal alignment semantics. They can differ in CIGAR and endpoint tie-breaking as noted above. Note that this option does not affect the score-only alignment mode, which always uses a minimal memory footprint of `O(s)`).
 
