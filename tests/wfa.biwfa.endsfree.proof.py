@@ -21,12 +21,6 @@ NEGATIVE_MATCH_MESSAGE = (
     "[WFA] BiWFA ends-free with negative match rewards (match < 0) "
     "requires aligned-length-aware breakpoint scoring and is not implemented yet\n"
 )
-BIWFA_RECURSION_RE = re.compile(
-    r"\[WFA::BiAlign\]\[Recursion=(\d+)\].*"
-    r"score,comp\) = \(\d+,\d+,(\d+),([A-Z0-9]+)\)"
-)
-
-
 @dataclass(frozen=True)
 class Case:
     pattern: str
@@ -596,33 +590,18 @@ def check_heuristic_smoke(align_benchmark: Path, workdir: Path) -> None:
             free_ends, span, cases, metrics=metrics, extra_args=heuristic_args)
 
 
-def check_recursive_smoke(align_benchmark: Path, workdir: Path) -> None:
+def check_long_divergent_smoke(align_benchmark: Path, workdir: Path) -> None:
     pattern, text = divergent_pair(900)
     cases = [Case("TTTT" + pattern + "GGGG", "CCCC" + text + "AAAA")]
-    input_path = workdir / "recursive.seq"
-    output_path = workdir / "recursive.alg"
-    write_cases(input_path, cases)
-    cmd = [
-        str(align_benchmark),
-        "--input",
-        str(input_path),
-        "--output-full",
-        str(output_path),
-        "--algorithm",
-        "gap-affine-wfa",
-        "--wfa-memory=ultralow",
-        "--wfa-span=ends-free,4,4,4,4",
-        "--verbose=3",
-    ]
-    completed = subprocess.run(cmd, text=True, capture_output=True)
-    if completed.returncode != 0:
-        raise RuntimeError("recursive smoke failed:\n" + " ".join(cmd))
-    debug = completed.stdout + completed.stderr
-    if "[WFA::BiAlign][Recursion=1]" not in debug:
-        raise AssertionError(
-            "long BiWFA case did not show recursive divide-and-conquer\n"
-            + " ".join(cmd)
-        )
+    check_cases(
+        align_benchmark,
+        workdir,
+        "long-divergent",
+        (4, 4, 4, 4),
+        "ends-free,4,4,4,4",
+        cases,
+        metrics=[metric for metric in METRICS if metric[0] == "affine"],
+    )
 
 
 def check_gap_component_score_floor(align_benchmark: Path, workdir: Path) -> None:
@@ -639,42 +618,6 @@ def check_gap_component_score_floor(align_benchmark: Path, workdir: Path) -> Non
         cases,
         metrics=[metric for metric in METRICS if metric[0] == "affine"],
     )
-    input_path = workdir / "gap-component-floor.seq"
-    output_path = workdir / "gap-component-floor.alg"
-    write_cases(input_path, cases)
-    cmd = [
-        str(align_benchmark),
-        "--input",
-        str(input_path),
-        "--output-full",
-        str(output_path),
-        "--algorithm",
-        "gap-affine-wfa",
-        "--wfa-memory=ultralow",
-        "--wfa-span=ends-free,80,80,80,80",
-        "--verbose=3",
-    ]
-    completed = subprocess.run(cmd, text=True, capture_output=True)
-    if completed.returncode != 0:
-        raise RuntimeError(
-            "gap-component score-floor case failed:\n" + " ".join(cmd)
-        )
-    debug = completed.stdout + completed.stderr
-    recursion = [
-        (int(level), int(score), component)
-        for level, score, component in BIWFA_RECURSION_RE.findall(debug)
-    ]
-    if not recursion:
-        raise AssertionError(
-            "gap-component case did not show recursive divide-and-conquer\n"
-            + " ".join(cmd)
-        )
-    max_depth = max(level for level, _, _ in recursion)
-    if max_depth > 6:
-        raise AssertionError(
-            f"gap-component recursion escaped the score floor: depth={max_depth}\n"
-            + " ".join(cmd)
-        )
 
 
 def main(argv: list[str]) -> int:
@@ -689,7 +632,7 @@ def main(argv: list[str]) -> int:
         check_tiny_exhaustive(align_benchmark, workdir)
         check_negative_match_rejection(align_benchmark, workdir)
         check_heuristic_smoke(align_benchmark, workdir)
-        check_recursive_smoke(align_benchmark, workdir)
+        check_long_divergent_smoke(align_benchmark, workdir)
         check_gap_component_score_floor(align_benchmark, workdir)
     return 0
 

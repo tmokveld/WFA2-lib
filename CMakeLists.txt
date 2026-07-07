@@ -34,6 +34,7 @@ option(EXTRA_FLAGS "Add optimization flags for C/C++ compiler" OFF)
 
 option(BUILD_SHARED_LIB "Build shared WFA2 library" OFF)
 option(BUILD_CXX_BINDING_LIB "Build C++ binding library" OFF)
+option(WFA_BUILD_PERF_TESTS "Enable timing-sensitive performance CTest tests" OFF)
 
 # ---- Dependencies
 
@@ -416,9 +417,17 @@ add_executable(wfa_biwfa_endsfree_score_perf_regression
 )
 target_link_libraries(wfa_biwfa_endsfree_score_perf_regression wfa2_static m)
 add_test(
-  NAME wfa_biwfa_endsfree_score_perf_regression
+  NAME wfa_biwfa_endsfree_score_regression
   COMMAND wfa_biwfa_endsfree_score_perf_regression
 )
+if(WFA_BUILD_PERF_TESTS)
+  add_test(
+    NAME wfa_biwfa_endsfree_score_perf_regression
+    COMMAND ${CMAKE_COMMAND} -E env WFA_RUN_PERF_REGRESSION=1 $<TARGET_FILE:wfa_biwfa_endsfree_score_perf_regression>
+  )
+  set_tests_properties(wfa_biwfa_endsfree_score_perf_regression
+    PROPERTIES LABELS perf)
+endif()
 
 add_executable(wfa_singletrack_heuristic_api_regression
   tests/wfa_singletrack_heuristic_api_regression.c

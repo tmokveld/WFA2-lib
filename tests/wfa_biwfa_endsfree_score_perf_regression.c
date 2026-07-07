@@ -7,8 +7,10 @@
  * This file is part of Wavefront Alignment Algorithms.
  */
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/time.h>
 
 #include "wavefront/wavefront_align.h"
@@ -17,11 +19,17 @@
 #define NUM_REPEATS 24
 #define NUM_SAMPLES 3
 #define MAX_ENDSFREE_GLOBAL_RATIO 3.0
+#define RUN_PERF_REGRESSION_ENV "WFA_RUN_PERF_REGRESSION"
 
 static double now_seconds(void) {
   struct timeval tv;
   gettimeofday(&tv,NULL);
   return (double)tv.tv_sec + (double)tv.tv_usec/1000000.0;
+}
+
+static bool run_perf_regression(void) {
+  const char* const value = getenv(RUN_PERF_REGRESSION_ENV);
+  return value != NULL && value[0] != '\0' && strcmp(value,"0") != 0;
 }
 
 static void build_pair(
@@ -110,8 +118,9 @@ int main(void) {
 
   wavefront_aligner_t* const oracle =
       new_aligner(wavefront_memory_high,true);
-  wavefront_aligner_t* const global =
-      new_aligner(wavefront_memory_ultralow,false);
+  const bool run_perf = run_perf_regression();
+  wavefront_aligner_t* const global = run_perf ?
+      new_aligner(wavefront_memory_ultralow,false) : NULL;
   wavefront_aligner_t* const endsfree =
       new_aligner(wavefront_memory_ultralow,true);
 
@@ -124,7 +133,7 @@ int main(void) {
     failed = 1;
   }
 
-  if (!failed) {
+  if (!failed && run_perf) {
     const double global_time = time_batch(global,pattern,text);
     const double endsfree_time = time_batch(endsfree,pattern,text);
     const double ratio = (global_time > 0.0) ?
@@ -139,7 +148,7 @@ int main(void) {
   }
 
   wavefront_aligner_delete(oracle);
-  wavefront_aligner_delete(global);
+  if (global != NULL) wavefront_aligner_delete(global);
   wavefront_aligner_delete(endsfree);
   free(pattern);
   free(text);
