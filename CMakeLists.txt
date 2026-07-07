@@ -290,6 +290,24 @@ add_test(
   COMMAND wfa_packed2bits_regression
 )
 
+add_executable(wfa_backtrace_active_bounds_regression
+  tests/wfa_backtrace_active_bounds_regression.c
+)
+target_link_libraries(wfa_backtrace_active_bounds_regression wfa2_static m)
+add_test(
+  NAME wfa_backtrace_active_bounds_regression
+  COMMAND wfa_backtrace_active_bounds_regression
+)
+
+add_executable(wfa_extend_kernel_regression
+  tests/wfa_extend_kernel_regression.c
+)
+target_link_libraries(wfa_extend_kernel_regression wfa2_static m)
+add_test(
+  NAME wfa_extend_kernel_regression
+  COMMAND wfa_extend_kernel_regression
+)
+
 add_executable(wfa_zdrop_piggyback_regression
   tests/wfa_zdrop_piggyback_regression.c
 )
