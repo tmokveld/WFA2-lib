@@ -42,9 +42,12 @@ int main(void) {
   failed |= check_sam_cigar("X",false,"1M");
   failed |= check_sam_cigar("XM",false,"2M");
   failed |= check_sam_cigar("XXM",false,"3M");
-  failed |= check_sam_cigar("XIX",false,"1M1I1M");
+  failed |= check_sam_cigar("XIX",false,"1M1D1M");
 
   failed |= check_sam_cigar("XM",true,"1X1=");
+  // WFA consumes text on I and pattern on D; SAM uses query-relative ops.
+  failed |= check_sam_cigar("MDDM",true,"1=2I1=");
+  failed |= check_sam_cigar("MIIM",true,"1=2D1=");
 
   return failed;
 }

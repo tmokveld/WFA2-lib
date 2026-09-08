@@ -78,10 +78,47 @@ void wavefront_bialign_debug(
   fprintf(stderr,")\n");
 }
 /*
+ * Static Band Heuristic Set Bands 
+ */
+void wavefront_bialign_set_subsidiary_band(
+    wavefront_aligner_t* const wf_aligner,
+    wavefront_aligner_t* const wf_forward,
+    wavefront_aligner_t* const wf_reverse) {
+  const wf_heuristic_strategy strategy = wf_aligner->heuristic.strategy;
+  if ((strategy & wf_heuristic_banded_static) == 0) {
+    return;
+  }
+  const int global_min_k = wf_aligner->heuristic.min_k;
+  const int global_max_k = wf_aligner->heuristic.max_k;
+  //Update bands for forward alignemnt
+  const wavefront_sequences_t* const sequences = &wf_forward->sequences;
+  const int sub_diagonal_shift = sequences->text_begin - sequences->pattern_begin;
+  wf_forward->heuristic.min_k = global_min_k - sub_diagonal_shift;
+  wf_forward->heuristic.max_k = global_max_k - sub_diagonal_shift;
+  //Update bands for reverse alignemnt 
+  const int diagonal_shift = sequences->text_length - sequences->pattern_length;
+  wf_reverse->heuristic.min_k = diagonal_shift - wf_forward->heuristic.max_k;
+  wf_reverse->heuristic.max_k = diagonal_shift - wf_forward->heuristic.min_k;
+}
+static void wavefront_bialign_set_base_band(
+    wavefront_aligner_t* const wf_aligner) {
+  wavefront_aligner_t* const wf_base = wf_aligner->bialigner->wf_base;
+  // Base cases must obey the global static band, but must not reapply
+  // adaptive/drop heuristics to the smaller reconstruction subproblem.
+  wavefront_heuristic_set_none(&wf_base->heuristic);
+  if (wf_aligner->heuristic.strategy & wf_heuristic_banded_static) {
+    const wavefront_sequences_t* const sequences = &wf_base->sequences;
+    const int diagonal_shift = sequences->text_begin - sequences->pattern_begin;
+    wavefront_heuristic_set_banded_static(&wf_base->heuristic,
+        wf_aligner->heuristic.min_k - diagonal_shift,
+        wf_aligner->heuristic.max_k - diagonal_shift);
+  }
+}
+/*
  * Init
  */
 void wavefront_bialign_init(
-    wavefront_bialigner_t* const bialigner,
+    wavefront_aligner_t* const wf_aligner,
     const distance_metric_t distance_metric,
     alignment_form_t* const form,
     const affine2p_matrix_type component_begin,
@@ -89,8 +126,10 @@ void wavefront_bialign_init(
     const int align_level,
     const int verbose) {
   // Parameters
+  wavefront_bialigner_t* const bialigner = wf_aligner->bialigner;
   wavefront_aligner_t* const wf_forward = bialigner->wf_forward;
   wavefront_aligner_t* const wf_reverse = bialigner->wf_reverse;
+  wavefront_bialign_set_subsidiary_band(wf_aligner,wf_forward,wf_reverse);
   // Configure WF-compute function
   switch (distance_metric) {
     case indel:
@@ -113,6 +152,7 @@ void wavefront_bialign_init(
   }
   // Initialize wavefront-aligner (forward)
   alignment_span_t span_forward =
+      form->span == alignment_endsfree &&
       (form->pattern_begin_free > 0 || form->text_begin_free > 0) ?
           alignment_endsfree : alignment_end2end;
   alignment_form_t form_forward = {
@@ -128,6 +168,7 @@ void wavefront_bialign_init(
   wavefront_aligner_init(wf_forward,align_level);
   // Initialize wavefront-aligner (reverse)
   alignment_span_t span_reverse =
+      form->span == alignment_endsfree &&
       (form->pattern_end_free > 0 || form->text_end_free > 0) ?
           alignment_endsfree : alignment_end2end;
   alignment_form_t form_reverse = {
@@ -173,6 +214,7 @@ int wavefront_bialign_base(
   const int verbose = wf_base->system.verbose;
   // Configure
   wf_base->alignment_form = *form;
+  wavefront_bialign_set_base_band(wf_aligner);
   wavefront_unialign_init(wf_base,component_begin,component_end);
   // DEBUG
   if (verbose >= 2) wavefront_debug_begin(wf_base);
@@ -206,6 +248,7 @@ int wavefront_bialign_base_score(
   // Configure
   wf_base->alignment_scope = compute_score;
   wf_base->alignment_form = *form;
+  wavefront_bialign_set_base_band(wf_aligner);
   wavefront_unialign_init(wf_base,component_begin,component_end);
   // Wavefront align sequences
   wavefront_unialign(wf_base);
@@ -1007,7 +1050,7 @@ int wavefront_bialign_overlap_gopen_adjust(
   }
 }
 int wavefront_bialign_find_breakpoint(
-    wavefront_bialigner_t* const bialigner,
+    wavefront_aligner_t* const wf_aligner,
     const distance_metric_t distance_metric,
     alignment_form_t* const form,
     const affine2p_matrix_type component_begin,
@@ -1015,13 +1058,14 @@ int wavefront_bialign_find_breakpoint(
     wf_bialign_breakpoint_t* const breakpoint,
     const int align_level) {
   // Parameters
+  wavefront_bialigner_t* const bialigner = wf_aligner->bialigner;
   wavefront_aligner_t* const wf_forward = bialigner->wf_forward;
   wavefront_aligner_t* const wf_reverse = bialigner->wf_reverse;
   alignment_system_t* const system = &wf_forward->system;
   const bool plot_enabled = (wf_forward->plot != NULL);
   const int verbose = system->verbose;
   // Init bialignment
-  wavefront_bialign_init(bialigner,distance_metric,form,component_begin,component_end,align_level,verbose);
+  wavefront_bialign_init(wf_aligner,distance_metric,form,component_begin,component_end,align_level,verbose);
   // Sequences
   wavefront_sequences_t* const sequences = &wf_forward->sequences;
   const int text_length = sequences->text_length;
@@ -1152,8 +1196,10 @@ void wavefront_bialign_init_half_0(
     const int pattern_length,
     const int text_length) {
   // Align half_0
-  const int pattern_begin_free = MIN(global_form->pattern_begin_free,pattern_length);
-  const int text_begin_free = MIN(global_form->text_begin_free,text_length);
+  const int pattern_begin_free = global_form->span == alignment_endsfree ?
+      MIN(global_form->pattern_begin_free,pattern_length) : 0;
+  const int text_begin_free = global_form->span == alignment_endsfree ?
+      MIN(global_form->text_begin_free,text_length) : 0;
   const alignment_span_t span_0 =
       (pattern_begin_free > 0 ||
        text_begin_free > 0) ?
@@ -1171,8 +1217,10 @@ void wavefront_bialign_init_half_1(
     const int pattern_length,
     const int text_length) {
   // Align half_1
-  const int pattern_end_free = MIN(global_form->pattern_end_free,pattern_length);
-  const int text_end_free = MIN(global_form->text_end_free,text_length);
+  const int pattern_end_free = global_form->span == alignment_endsfree ?
+      MIN(global_form->pattern_end_free,pattern_length) : 0;
+  const int text_end_free = global_form->span == alignment_endsfree ?
+      MIN(global_form->text_end_free,text_length) : 0;
   const alignment_span_t span_1 =
       (pattern_end_free > 0 ||
        text_end_free > 0) ?
@@ -1283,7 +1331,7 @@ int wavefront_bialign_compute_score_recursive(
   // Find breakpoint in the alignment
   wf_bialign_breakpoint_t breakpoint;
   int align_status = wavefront_bialign_find_breakpoint(
-      wf_aligner->bialigner,wf_aligner->penalties.distance_metric,
+      wf_aligner,wf_aligner->penalties.distance_metric,
       form,component_begin,component_end,&breakpoint,align_level);
   if (align_status == WF_STATUS_END_REACHED) {
     wavefront_aligner_t* const wf_forward = wf_aligner->bialigner->wf_forward;
@@ -1379,7 +1427,7 @@ int wavefront_bialign_alignment(
   // Find breakpoint in the alignment
   wf_bialign_breakpoint_t breakpoint;
   int align_status = wavefront_bialign_find_breakpoint(
-      wf_aligner->bialigner,wf_aligner->penalties.distance_metric,
+      wf_aligner,wf_aligner->penalties.distance_metric,
       form,component_begin,component_end,&breakpoint,align_level);
   // DEBUG
   if (wf_aligner->system.verbose >= 2) {
@@ -1465,7 +1513,7 @@ int wavefront_bialign_compute_score(
   }
   // Find breakpoint in the alignment
   wf_bialign_breakpoint_t breakpoint;
-  const int align_status = wavefront_bialign_find_breakpoint(wf_aligner->bialigner,
+  const int align_status = wavefront_bialign_find_breakpoint(wf_aligner,
       wf_aligner->penalties.distance_metric,&wf_aligner->alignment_form,
       affine2p_matrix_M,affine2p_matrix_M,&breakpoint,0);
   // DEBUG

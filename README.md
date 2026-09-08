@@ -160,11 +160,15 @@ Display the result of the alignment.
 // Display CIGAR in raw format (e.g. MMMDDDXD)
 string raw_cigar = aligner.getAlignment();
 cout << "Raw CIGAR: " << raw_cigar  << endl;
-// Display CIGAR in SAM format (e.g. 3M3D1X1D)
+// Display CIGAR in SAM format (e.g. 3M3I1M1I for the raw example above)
 string sam_cigar = aligner.getCIGAR(false);
 cout << "SAM CIGAR: " << sam_cigar  << endl;
 cout << "Alignment score " << aligner.getAlignmentScore() << endl;
 ```
+
+SAM CIGAR treats the pattern as the query and the text as the reference. Its `I` and `D` operations are therefore reversed relative to the raw WFA alignment returned by `getAlignment()`. With `getCIGAR(false)`, both matches and mismatches are reported as `M`; use `getCIGAR(true)` for `=` and `X`.
+
+C++ aligners own their C alignment state through a smart pointer. They can be moved, but not copied; a moved-from aligner must be assigned a new aligner before it can be used again. Rebuild C++ consumers when updating from the older raw-pointer binding, as the accessor signatures and class layout have changed.
 
 > [!IMPORTANT]
 > Once an alignment object is created, **it is strongly recommended to reuse it to compute multiple alignments**. Creating and destroying the alignment object for every alignment computed can have a significant overhead. Reusing the alignment object allows repurposing internal data structures, minimising the cost of memory allocations, and avoiding multiple alignment setups and precomputations.
@@ -533,7 +537,11 @@ WFA2's heuristics are classified into the following categories: ['wf-adaptive'](
   attributes.heuristic.max_k = +10;
 ```
 
+BiWFA (`ultralow`) translates static bands from the original sequence coordinates into each forward, reverse, and base sub-alignment. The same band is retained during score-only endpoint recovery. This does not turn a banded alignment into an unbanded exact alignment: a band can exclude the optimal path.
+
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;**Adaptive-band** is similar to the static-band heuristic; however, it allows the band to move towards the diagonals closer to the end of the alignment. Unlike the static-band that is performed on each step, the adaptive-band heuristics allows configuring the number of steps between heuristic band cut-offs.
+
+For adaptive bands, `max_k - min_k + 1` specifies the band width, not fixed global bounds. The band can move beyond the initial `min_k` and `max_k` coordinates.
 
 ```C
   wavefront_aligner_attr_t attributes = wavefront_aligner_attr_default;

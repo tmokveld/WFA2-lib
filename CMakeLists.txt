@@ -445,6 +445,25 @@ add_test(
   COMMAND wfa_cpp_singletrack_regression
 )
 
+add_executable(wfa_cpp_upstream_regression
+  tests/wfa_cpp_upstream_regression.cpp
+  bindings/cpp/WFAligner.cpp
+)
+target_link_libraries(wfa_cpp_upstream_regression wfa2_static m)
+add_test(
+  NAME wfa_cpp_upstream_regression
+  COMMAND wfa_cpp_upstream_regression
+)
+
+add_executable(wfa_banded_biwfa_regression
+  tests/wfa_banded_biwfa_regression.c
+)
+target_link_libraries(wfa_banded_biwfa_regression wfa2_static m)
+add_test(
+  NAME wfa_banded_biwfa_regression
+  COMMAND wfa_banded_biwfa_regression
+)
+
 # ---- Install
 
 # Do not install anything when used with FetchContent

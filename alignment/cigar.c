@@ -50,8 +50,8 @@ const uint8_t sam_cigar_lut[256] =
 {
   [0 ... 255] = SAM_CIGAR_NA,
   ['M'] = SAM_CIGAR_MATCH,
-  ['I'] = SAM_CIGAR_INS,
-  ['D'] = SAM_CIGAR_DEL,
+  ['I'] = SAM_CIGAR_DEL,
+  ['D'] = SAM_CIGAR_INS,
   ['N'] = SAM_CIGAR_N_SKIP,
   ['='] = SAM_CIGAR_EQ,
   ['X'] = SAM_CIGAR_X,

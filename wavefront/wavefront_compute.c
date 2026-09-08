@@ -35,6 +35,23 @@
 #include "wavefront_compute.h"
 
 /*
+ * Compute global alignment limits for heuristic
+*/
+void wavefront_compute_limits_heuristic(
+  wavefront_aligner_t* const wf_aligner,
+  int* const lo,
+  int* const hi
+) {
+  const wf_heuristic_strategy strategy = wf_aligner->heuristic.strategy;
+  const bool banded_enabled = (strategy & wf_heuristic_banded_static);
+  // Clamp to static band limits
+  // Adaptive bands specify a width, not fixed diagonal coordinates.
+  if (banded_enabled) {
+    if (*lo < (wf_aligner->heuristic.min_k)) *lo = wf_aligner->heuristic.min_k;
+    if (*hi > (wf_aligner->heuristic.max_k)) *hi = wf_aligner->heuristic.max_k;
+  }
+}
+/*
  * Compute limits
  */
 void wavefront_compute_limits_input(
@@ -53,6 +70,7 @@ void wavefront_compute_limits_input(
   if (min_lo > m_open1->lo-1) min_lo = m_open1->lo-1;
   if (max_hi < m_open1->hi+1) max_hi = m_open1->hi+1;
   if (distance_metric == gap_linear) {
+    wavefront_compute_limits_heuristic(wf_aligner,&min_lo,&max_hi);
     *lo = min_lo;
     *hi = max_hi;
     return;
@@ -66,6 +84,7 @@ void wavefront_compute_limits_input(
   if (min_lo > d1_ext->lo-1) min_lo = d1_ext->lo-1;
   if (max_hi < d1_ext->hi-1) max_hi = d1_ext->hi-1;
   if (distance_metric == gap_affine) {
+    wavefront_compute_limits_heuristic(wf_aligner,&min_lo,&max_hi);
     *lo = min_lo;
     *hi = max_hi;
     return;
@@ -81,6 +100,7 @@ void wavefront_compute_limits_input(
   if (max_hi < i2_ext->hi+1) max_hi = i2_ext->hi+1;
   if (min_lo > d2_ext->lo-1) min_lo = d2_ext->lo-1;
   if (max_hi < d2_ext->hi-1) max_hi = d2_ext->hi-1;
+  wavefront_compute_limits_heuristic(wf_aligner,&min_lo,&max_hi);
   *lo = min_lo;
   *hi = max_hi;
 }
