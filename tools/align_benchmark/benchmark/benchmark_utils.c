@@ -127,7 +127,7 @@ void benchmark_print_output_full(
   const bool cigar_null = (cigar->begin_offset >= cigar->end_offset);
   char* cigar_str = NULL;
   if (!cigar_null) {
-    cigar_str = malloc(2*(cigar->end_offset-cigar->begin_offset));
+    cigar_str = malloc(2*(cigar->end_offset-cigar->begin_offset)+1);
     cigar_sprint(cigar_str,cigar,true);
   }
   // Print
