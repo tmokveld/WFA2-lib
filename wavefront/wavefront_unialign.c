@@ -191,9 +191,12 @@ void wavefront_unialign_terminate(
     } else {
       const int k = wf_aligner->alignment_end_pos.k;
       const int offset = wf_aligner->alignment_end_pos.offset;
-      cigar->end_v = WAVEFRONT_V(k,offset);
-      cigar->end_h = WAVEFRONT_H(k,offset);
-      cigar->score = wavefront_compute_classic_score(wf_aligner,cigar->end_v,cigar->end_h,alignment_score);
+      // Preserve the unset result when no partial endpoint was found.
+      if (offset != WAVEFRONT_OFFSET_NULL) {
+        cigar->end_v = WAVEFRONT_V(k,offset);
+        cigar->end_h = WAVEFRONT_H(k,offset);
+        cigar->score = wavefront_compute_classic_score(wf_aligner,cigar->end_v,cigar->end_h,alignment_score);
+      }
       align_status->dropped = true;
       align_status->status = WF_STATUS_ALG_PARTIAL;
     }

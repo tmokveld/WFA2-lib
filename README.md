@@ -539,6 +539,8 @@ WFA2's heuristics are classified into the following categories: ['wf-adaptive'](
 
 BiWFA (`ultralow`) translates static bands from the original sequence coordinates into each forward, reverse, and base sub-alignment. The same band is retained during score-only endpoint recovery. This does not turn a banded alignment into an unbanded exact alignment: a band can exclude the optimal path.
 
+Static-band bounds may span the full `int` range, including `[INT_MIN, INT_MAX]`. If pruning exhausts the edit/indel frontier, BiWFA reports `WF_STATUS_UNATTAINABLE`; unidirectional alignment retains its partial-alignment behavior.
+
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;**Adaptive-band** is similar to the static-band heuristic; however, it allows the band to move towards the diagonals closer to the end of the alignment. Unlike the static-band that is performed on each step, the adaptive-band heuristics allows configuring the number of steps between heuristic band cut-offs.
 
 For adaptive bands, `max_k - min_k + 1` specifies the band width, not fixed global bounds. The band can move beyond the initial `min_k` and `max_k` coordinates.

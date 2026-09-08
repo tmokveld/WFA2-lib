@@ -80,6 +80,10 @@ void wavefront_bialign_debug(
 /*
  * Static Band Heuristic Set Bands 
  */
+static int wavefront_bialign_clamp_band_k(
+    const int64_t k) {
+  return (int)MAX((int64_t)INT_MIN,MIN((int64_t)INT_MAX,k));
+}
 void wavefront_bialign_set_subsidiary_band(
     wavefront_aligner_t* const wf_aligner,
     wavefront_aligner_t* const wf_forward,
@@ -90,15 +94,14 @@ void wavefront_bialign_set_subsidiary_band(
   }
   const int global_min_k = wf_aligner->heuristic.min_k;
   const int global_max_k = wf_aligner->heuristic.max_k;
-  //Update bands for forward alignemnt
+  // Translate from global coordinates before clamping either direction.
   const wavefront_sequences_t* const sequences = &wf_forward->sequences;
-  const int sub_diagonal_shift = sequences->text_begin - sequences->pattern_begin;
-  wf_forward->heuristic.min_k = global_min_k - sub_diagonal_shift;
-  wf_forward->heuristic.max_k = global_max_k - sub_diagonal_shift;
-  //Update bands for reverse alignemnt 
-  const int diagonal_shift = sequences->text_length - sequences->pattern_length;
-  wf_reverse->heuristic.min_k = diagonal_shift - wf_forward->heuristic.max_k;
-  wf_reverse->heuristic.max_k = diagonal_shift - wf_forward->heuristic.min_k;
+  const int64_t forward_shift = (int64_t)sequences->text_begin - sequences->pattern_begin;
+  const int64_t reverse_shift = forward_shift + sequences->text_length - sequences->pattern_length;
+  wf_forward->heuristic.min_k = wavefront_bialign_clamp_band_k(global_min_k - forward_shift);
+  wf_forward->heuristic.max_k = wavefront_bialign_clamp_band_k(global_max_k - forward_shift);
+  wf_reverse->heuristic.min_k = wavefront_bialign_clamp_band_k(reverse_shift - global_max_k);
+  wf_reverse->heuristic.max_k = wavefront_bialign_clamp_band_k(reverse_shift - global_min_k);
 }
 static void wavefront_bialign_set_base_band(
     wavefront_aligner_t* const wf_aligner) {
@@ -108,10 +111,10 @@ static void wavefront_bialign_set_base_band(
   wavefront_heuristic_set_none(&wf_base->heuristic);
   if (wf_aligner->heuristic.strategy & wf_heuristic_banded_static) {
     const wavefront_sequences_t* const sequences = &wf_base->sequences;
-    const int diagonal_shift = sequences->text_begin - sequences->pattern_begin;
+    const int64_t diagonal_shift = (int64_t)sequences->text_begin - sequences->pattern_begin;
     wavefront_heuristic_set_banded_static(&wf_base->heuristic,
-        wf_aligner->heuristic.min_k - diagonal_shift,
-        wf_aligner->heuristic.max_k - diagonal_shift);
+        wavefront_bialign_clamp_band_k(wf_aligner->heuristic.min_k - diagonal_shift),
+        wavefront_bialign_clamp_band_k(wf_aligner->heuristic.max_k - diagonal_shift));
   }
 }
 /*

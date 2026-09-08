@@ -2,6 +2,7 @@
  * Wavefront Alignment Algorithms
  * Regression coverage for static BiWFA band coordinates and adaptive movement.
  */
+#include <limits.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -61,6 +62,77 @@ static int check_static_band(
   return 0;
 }
 
+static int check_unreachable_band(void) {
+  char pattern[128], text[256];
+  memset(pattern,'A',sizeof(pattern));
+  memset(text,'C',sizeof(text));
+  const distance_metric_t distances[] = {indel,edit};
+  const wavefront_memory_t modes[] = {
+      wavefront_memory_high, wavefront_memory_ultralow};
+  for (int distance=0;distance<2;++distance) {
+    for (int mode=0;mode<2;++mode) {
+      const int expected_status = modes[mode] == wavefront_memory_ultralow ?
+          WF_STATUS_UNATTAINABLE : WF_STATUS_ALG_PARTIAL;
+      for (int score_only=0;score_only<2;++score_only) {
+        wavefront_aligner_attr_t attr = wavefront_aligner_attr_default;
+        attr.distance_metric = distances[distance];
+        attr.memory_mode = modes[mode];
+        attr.alignment_scope = score_only ? compute_score : compute_alignment;
+        attr.heuristic.strategy = wf_heuristic_none;
+        attr.system.max_alignment_steps = 1024;
+        wavefront_aligner_t* const aligner = wavefront_aligner_new(&attr);
+        wavefront_aligner_set_heuristic_banded_static(aligner,-4,4);
+        for (int reverse=0;reverse<2;++reverse) {
+          const int status = reverse ?
+              wavefront_align(aligner,text,sizeof(text),pattern,sizeof(pattern)) :
+              wavefront_align(aligner,pattern,sizeof(pattern),text,sizeof(text));
+          if (status != expected_status) {
+            fprintf(stderr,"Unreachable band: distance=%d memory=%d "
+                "score_only=%d reverse=%d status=%d\n",
+                distances[distance],modes[mode],score_only,reverse,status);
+            wavefront_aligner_delete(aligner);
+            return 1;
+          }
+        }
+        wavefront_aligner_delete(aligner);
+      }
+    }
+  }
+  return 0;
+}
+
+static int check_wide_band(
+    const char* const pattern,
+    const char* const text,
+    const int expected_score) {
+  const int pattern_length = (int)strlen(pattern);
+  const int text_length = (int)strlen(text);
+  for (int score_only=0;score_only<2;++score_only) {
+    wavefront_aligner_attr_t attr = wavefront_aligner_attr_default;
+    attr.distance_metric = gap_affine;
+    attr.affine_penalties = (affine_penalties_t){0,4,6,2};
+    attr.memory_mode = wavefront_memory_ultralow;
+    attr.alignment_scope = score_only ? compute_score : compute_alignment;
+    attr.heuristic.strategy = wf_heuristic_none;
+    wavefront_aligner_t* const aligner = wavefront_aligner_new(&attr);
+    wavefront_aligner_set_heuristic_banded_static(aligner,INT_MIN,INT_MAX);
+    const int status = wavefront_align(aligner,pattern,pattern_length,text,text_length);
+    int failed = status != WF_STATUS_ALG_COMPLETED ||
+        aligner->cigar->score != expected_score;
+    if (!score_only && status == WF_STATUS_ALG_COMPLETED) {
+      failed |= !cigar_check_alignment(stderr,pattern,pattern_length,
+          text,text_length,aligner->cigar,true);
+    }
+    if (failed) {
+      fprintf(stderr,"Wide band: score_only=%d status=%d score=%d expected=%d\n",
+          score_only,status,aligner->cigar->score,expected_score);
+    }
+    wavefront_aligner_delete(aligner);
+    if (failed) return 1;
+  }
+  return 0;
+}
+
 static int check_adaptive_movement(void) {
   char pattern[129], text[149];
   for (int i=0;i<128;++i) pattern[i] = "ACGT"[i%4];
@@ -105,5 +177,18 @@ int main(void) {
   text[272] = '\0';
   failed |= check_static_band(pattern,text,-4,20,16);
   failed |= check_adaptive_movement();
+  failed |= check_unreachable_band();
+  char wide_pattern[1025], wide_text[1025];
+  memset(wide_pattern,'A',512);
+  memset(wide_text,'C',512);
+  wide_pattern[512] = wide_text[512] = '\0';
+  failed |= check_wide_band(wide_pattern,wide_text,-2048);
+  // Force recursive/base sub-alignments with nonzero diagonal shifts.
+  memset(wide_pattern+512,'C',512);
+  memset(wide_text,'G',128);
+  memcpy(wide_text+128,wide_pattern,896);
+  wide_pattern[1024] = wide_text[1024] = '\0';
+  failed |= check_wide_band(wide_pattern,wide_text,-524);
+  failed |= check_wide_band(wide_text,wide_pattern,-524);
   return failed;
 }
