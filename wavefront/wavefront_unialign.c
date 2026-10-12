@@ -223,9 +223,14 @@ void wavefront_unialign_terminate(
           wavefront_backtrace_linear(wf_aligner,
               alignment_score,alignment_end_k,alignment_end_offset);
         } else if (wf_aligner->memory_mode == wavefront_memory_singletrack) {
-          wavefront_backtrace_affine_m_only(wf_aligner,
-              wf_aligner->component_begin,wf_aligner->component_end,
-              alignment_score,alignment_end_k,alignment_end_offset);
+          if (!wavefront_backtrace_affine_m_only(wf_aligner,
+                  wf_aligner->component_begin,wf_aligner->component_end,
+                  alignment_score,alignment_end_k,alignment_end_offset)) {
+            align_status->dropped =
+                (align_status->status == WF_STATUS_END_UNREACHABLE);
+            align_status->status = WF_STATUS_UNATTAINABLE;
+            return;
+          }
         } else {
           wavefront_backtrace_affine(wf_aligner,
               wf_aligner->component_begin,wf_aligner->component_end,

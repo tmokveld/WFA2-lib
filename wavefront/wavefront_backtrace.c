@@ -66,16 +66,18 @@ static bool wavefront_backtrace_m_offset(
     wavefront_aligner_t* const wf_aligner,
     const int score,
     const int k,
+    const bool use_initialized_bounds,
     wf_offset_t* const offset) {
   if (score < 0) return false;
   wavefront_components_t* const wf_components = &wf_aligner->wf_components;
   if (score >= wf_components->num_wavefronts) return false;
   wavefront_t* const mwavefront = wf_components->mwavefronts[score];
   if (mwavefront == NULL) return false;
-  // Use active bounds; initialized padding can include heuristic-pruned states.
-  if (k < mwavefront->lo || mwavefront->hi < k) {
-    return false;
-  }
+  const int lo = use_initialized_bounds ?
+      mwavefront->wf_elements_init_min : mwavefront->lo;
+  const int hi = use_initialized_bounds ?
+      mwavefront->wf_elements_init_max : mwavefront->hi;
+  if (k < lo || hi < k) return false;
   const wf_offset_t m_offset = mwavefront->offsets[k];
   if (m_offset == WAVEFRONT_OFFSET_NULL) return false;
   *offset = m_offset;
@@ -150,7 +152,7 @@ int64_t wavefront_backtrace_misms(
     const int score,
     const int k) {
   wf_offset_t offset;
-  return wavefront_backtrace_m_offset(wf_aligner,score,k,&offset) ?
+  return wavefront_backtrace_m_offset(wf_aligner,score,k,true,&offset) ?
       BACKTRACE_PIGGYBACK_SET(offset+1,backtrace_M) :
       WAVEFRONT_OFFSET_NULL;
 }
@@ -170,7 +172,7 @@ int64_t wavefront_backtrace_del1_open(
     const int score,
     const int k) {
   wf_offset_t offset;
-  return wavefront_backtrace_m_offset(wf_aligner,score,k+1,&offset) ?
+  return wavefront_backtrace_m_offset(wf_aligner,score,k+1,true,&offset) ?
       BACKTRACE_PIGGYBACK_SET(offset,backtrace_D1_open) :
       WAVEFRONT_OFFSET_NULL;
 }
@@ -179,7 +181,7 @@ int64_t wavefront_backtrace_del2_open(
     const int score,
     const int k) {
   wf_offset_t offset;
-  return wavefront_backtrace_m_offset(wf_aligner,score,k+1,&offset) ?
+  return wavefront_backtrace_m_offset(wf_aligner,score,k+1,true,&offset) ?
       BACKTRACE_PIGGYBACK_SET(offset,backtrace_D2_open) :
       WAVEFRONT_OFFSET_NULL;
 }
@@ -219,7 +221,7 @@ int64_t wavefront_backtrace_ins1_open(
     const int score,
     const int k) {
   wf_offset_t offset;
-  return wavefront_backtrace_m_offset(wf_aligner,score,k-1,&offset) ?
+  return wavefront_backtrace_m_offset(wf_aligner,score,k-1,true,&offset) ?
       BACKTRACE_PIGGYBACK_SET(offset+1,backtrace_I1_open) :
       WAVEFRONT_OFFSET_NULL;
 }
@@ -228,7 +230,7 @@ int64_t wavefront_backtrace_ins2_open(
     const int score,
     const int k) {
   wf_offset_t offset;
-  return wavefront_backtrace_m_offset(wf_aligner,score,k-1,&offset) ?
+  return wavefront_backtrace_m_offset(wf_aligner,score,k-1,true,&offset) ?
       BACKTRACE_PIGGYBACK_SET(offset+1,backtrace_I2_open) :
       WAVEFRONT_OFFSET_NULL;
 }
@@ -780,6 +782,7 @@ static bool wavefront_backtrace_m_only_try_indel(
     const int k,
     const wf_offset_t offset,
     const wf_offset_t offset_orig,
+    const bool use_initialized_bounds,
     int* const next_score,
     int* const next_k,
     wf_offset_t* const next_offset) {
@@ -794,7 +797,8 @@ static bool wavefront_backtrace_m_only_try_indel(
     if (indel1 >= 0) {
       score_in_scope = true;
       wf_offset_t m_offset;
-      if (wavefront_backtrace_m_offset(wf_aligner,indel1,k_ins,&m_offset) &&
+      if (wavefront_backtrace_m_offset(
+              wf_aligner,indel1,k_ins,use_initialized_bounds,&m_offset) &&
           m_offset + l >= offset_orig &&
           m_offset + l <= offset) {
         const int nmatches = offset - (m_offset + l);
@@ -805,7 +809,8 @@ static bool wavefront_backtrace_m_only_try_indel(
         *next_score = indel1;
         return true;
       }
-      if (wavefront_backtrace_m_offset(wf_aligner,indel1,k_del,&m_offset) &&
+      if (wavefront_backtrace_m_offset(
+              wf_aligner,indel1,k_del,use_initialized_bounds,&m_offset) &&
           m_offset >= offset_orig &&
           m_offset <= offset) {
         const int nmatches = offset - m_offset;
@@ -823,7 +828,8 @@ static bool wavefront_backtrace_m_only_try_indel(
       if (indel2 >= 0) {
         score_in_scope = true;
         wf_offset_t m_offset;
-        if (wavefront_backtrace_m_offset(wf_aligner,indel2,k_ins,&m_offset) &&
+        if (wavefront_backtrace_m_offset(
+                wf_aligner,indel2,k_ins,use_initialized_bounds,&m_offset) &&
             m_offset + l >= offset_orig &&
             m_offset + l <= offset) {
           const int nmatches = offset - (m_offset + l);
@@ -834,7 +840,8 @@ static bool wavefront_backtrace_m_only_try_indel(
           *next_score = indel2;
           return true;
         }
-        if (wavefront_backtrace_m_offset(wf_aligner,indel2,k_del,&m_offset) &&
+        if (wavefront_backtrace_m_offset(
+                wf_aligner,indel2,k_del,use_initialized_bounds,&m_offset) &&
             m_offset >= offset_orig &&
             m_offset <= offset) {
           const int nmatches = offset - m_offset;
@@ -897,8 +904,9 @@ static void wavefront_backtrace_m_only_free_temps(
  * traceback starts.
  * @param alignment_offset The offset of the cell (N, M), where the traceback
  * starts.
+ * @return True if traceback completed, false if no valid predecessor was found.
  */
-void wavefront_backtrace_affine_m_only(
+bool wavefront_backtrace_affine_m_only(
     wavefront_aligner_t* const wf_aligner,
     const affine2p_matrix_type component_begin,
     const affine2p_matrix_type component_end,
@@ -928,6 +936,7 @@ void wavefront_backtrace_affine_m_only(
   int v = WAVEFRONT_V(alignment_k,alignment_offset);
   wf_offset_t offset = alignment_offset;
   wf_offset_t offset_orig = offset;
+  bool completed = false;
 
   // Account for ending insertions/deletions
   if (component_end == affine2p_matrix_M) { // ends-free
@@ -942,10 +951,10 @@ void wavefront_backtrace_affine_m_only(
   }
 
   bool in_mmatrix = component_end == affine2p_matrix_M;
-  int l = 0; // Length of the current chain of insertions or deletions.
 
   // Trace the alignment back
   while (score != 0) {
+    int nmatches = 0;
     if (in_mmatrix) {
       v = WAVEFRONT_V(k, offset);
       h = WAVEFRONT_H(k, offset);
@@ -958,10 +967,8 @@ void wavefront_backtrace_affine_m_only(
         break;
       }
 
-      const int nmatches =
+      nmatches =
           wavefront_backtrace_m_only_count_backward_matches(wf_aligner,v,h);
-
-      const int mismatch = score - penalties->mismatch;
 
       offset_orig = offset - nmatches;
 
@@ -977,147 +984,47 @@ void wavefront_backtrace_affine_m_only(
         break;
       }
 
-      if (wf_aligner->alignment_form.extension &&
-          wavefront_backtrace_m_only_try_indel(
-              wf_aligner,cigar,distance_metric,
-              score,k,offset,offset_orig,
-              &score,&k,&offset)) {
-        in_mmatrix = true;
-        continue;
+    }
+
+    // Prefer active predecessors. Retry the complete cell search using the
+    // initialized range only if no active predecessor can reconstruct it.
+    const bool gaps_first = !in_mmatrix || wf_aligner->alignment_form.extension;
+    bool found = false;
+    int pass;
+    for (pass=0;pass<2 && !found;++pass) {
+      const bool use_initialized_bounds = (pass == 1);
+      if (gaps_first) {
+        found = wavefront_backtrace_m_only_try_indel(
+            wf_aligner,cigar,distance_metric,
+            score,k,offset,offset_orig,use_initialized_bounds,
+            &score,&k,&offset);
+        if (found) break;
       }
-
-      // If we come from a mismatch, then the backwards extend is correct.
-      wf_offset_t m_offset;
-      if (wavefront_backtrace_m_offset(wf_aligner,mismatch,k,&m_offset) &&
-          m_offset + 1 == offset_orig) {
-
-        offset = offset_orig - 1;
-
-        score = mismatch;
-
-        wavefront_backtrace_add_lut_to_cigar(cigar, matches_lut, nmatches);
-        cigar->operations[(cigar->begin_offset)--] = 'X';
+      if (in_mmatrix) {
+        const int mismatch = score - penalties->mismatch;
+        wf_offset_t m_offset;
+        if (wavefront_backtrace_m_offset(
+                wf_aligner,mismatch,k,use_initialized_bounds,&m_offset) &&
+            m_offset + 1 == offset_orig) {
+          wavefront_backtrace_add_lut_to_cigar(cigar,matches_lut,nmatches);
+          cigar->operations[(cigar->begin_offset)--] = 'X';
+          offset = offset_orig - 1;
+          score = mismatch;
+          found = true;
+          break;
+        }
       }
-      else {
-        // Otherwise, we come from either I1, D2, I2 or D2.
-        // Freeze v and h and start searching a path back to M.
-
-        // In WFA, for a given diagonal and score, we only store the furthest
-        // reaching offset. We do not know which was the offset prior to
-        // extending it. To account for that, we must allow the indel to come
-        // at any point between the offset previous performing the backwards
-        // extension and the current offset.
-        //
-        // Example, in the following DP table, where there is a chain of 3
-        // matches an insertion can come from any of the positions marked with
-        // '>'.
-        //
-        //      A  A  A
-        //  A > M
-        //  A    > M
-        //  A       > M
-        //
-        in_mmatrix = false;
-
-        l = 0;
-      }
-    } else {
-      // We are searching a path back to M in I1, D1, I2 and D2.
-      // Any path that leads to M is valid.
-      ++l;
-
-      const int k_ins = k - l;
-      const int k_del = k + l;
-
-      const int indel1 = score - penalties->gap_opening1 -
-                         l * penalties->gap_extension1;
-
-      // I1 path.
-      wf_offset_t m_offset;
-      if (wavefront_backtrace_m_offset(wf_aligner,indel1,k_ins,&m_offset) &&
-          m_offset + l >= offset_orig &&
-          m_offset + l <= offset) {
-
-        const int nmatches = offset - (m_offset + l);
-
-        wavefront_backtrace_add_lut_to_cigar(cigar, matches_lut, nmatches);
-        wavefront_backtrace_add_lut_to_cigar(cigar, insertions_lut, l);
-
-        k = k_ins;
-        offset = m_offset;
-        score = indel1;
-
-        in_mmatrix = true;
-
-        continue;
-      }
-
-      // D1 path.
-      if (wavefront_backtrace_m_offset(wf_aligner,indel1,k_del,&m_offset) &&
-          m_offset >= offset_orig &&
-          m_offset <= offset) {
-
-        const int nmatches = offset - m_offset;
-
-        wavefront_backtrace_add_lut_to_cigar(cigar, matches_lut, nmatches);
-        wavefront_backtrace_add_lut_to_cigar(cigar, deletions_lut, l);
-
-        k = k_del;
-        offset = m_offset;
-        score = indel1;
-
-        in_mmatrix = true;
-
-        continue;
-      }
-
-      if (distance_metric != gap_affine_2p) {
-        if (indel1 < 0) break;
-        continue;
-      }
-
-      const int indel2 = score - penalties->gap_opening2 -
-                         l * penalties->gap_extension2;
-      if (indel1 < 0 && indel2 < 0) break;
-
-      // I2 path.
-      if (wavefront_backtrace_m_offset(wf_aligner,indel2,k_ins,&m_offset) &&
-          m_offset + l >= offset_orig &&
-          m_offset + l <= offset) {
-
-        const int nmatches = offset - (m_offset + l);
-
-        wavefront_backtrace_add_lut_to_cigar(cigar, matches_lut, nmatches);
-        wavefront_backtrace_add_lut_to_cigar(cigar, insertions_lut, l);
-
-        k = k_ins;
-        offset = m_offset;
-        score = indel2;
-
-        in_mmatrix = true;
-
-        continue;
-      }
-
-      // D2 path.
-      if (wavefront_backtrace_m_offset(wf_aligner,indel2,k_del,&m_offset) &&
-          m_offset >= offset_orig &&
-          m_offset <= offset) {
-
-        const int nmatches = offset - m_offset;
-
-        wavefront_backtrace_add_lut_to_cigar(cigar, matches_lut, nmatches);
-        wavefront_backtrace_add_lut_to_cigar(cigar, deletions_lut, l);
-
-        k = k_del;
-        offset = m_offset;
-        score = indel2;
-
-        in_mmatrix = true;
-
-        continue;
+      if (!gaps_first) {
+        // Gaps may precede any part of the backward match run, because M
+        // stores only the furthest offset after forward extension.
+        found = wavefront_backtrace_m_only_try_indel(
+            wf_aligner,cigar,distance_metric,
+            score,k,offset,offset_orig,use_initialized_bounds,
+            &score,&k,&offset);
       }
     }
+    if (!found) goto failure;
+    in_mmatrix = true;
   }
 
   // Account for last operations. The traceback loop above relies on every
@@ -1153,33 +1060,24 @@ void wavefront_backtrace_affine_m_only(
     }
   }
 
-  // DEBUG
   if (v != 0 || h != 0 || (score != 0 && penalties->match == 0)) {
-    fprintf(stderr,"[WFA::Backtrace] I?/D?-Beginning backtrace error\n");
-    fprintf(stderr,">%.*s\n",pattern_length,sequences->pattern);
-    fprintf(stderr,"<%.*s\n",text_length,sequences->text);
-    exit(-1);
+    goto failure;
   }
-
-  // Release temporary I/D wavefronts. The traceback above uses M only.
-  wavefront_backtrace_m_only_free_temps(
-      wf_aligner,distance_metric,alignment_score);
 
   // Set CIGAR
   ++(cigar->begin_offset);
   cigar->score = alignment_score;
 
-#if 0
-  const bool ok = check_cigar_backtrace_affine_m_only(penalties,
-                                                      cigar,
-                                                      sequences,
-                                                      alignment_score,
-                                                      distance_metric == gap_affine_2p);
-  if (!ok) {
-    fprintf(stderr, "[WFA::Backtrace] M-only backtrace not coherent\n");
-    exit(-1);
-  }
-#endif
+  completed = true;
+  goto cleanup;
+
+failure:
+  cigar_clear(cigar);
+cleanup:
+  // Release temporary I/D wavefronts exactly once on either outcome.
+  wavefront_backtrace_m_only_free_temps(
+      wf_aligner,distance_metric,alignment_score);
+  return completed;
 }
 /*
  * Backtrace from BT-Buffer (pcigar)

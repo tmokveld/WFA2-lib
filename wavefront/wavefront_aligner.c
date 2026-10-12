@@ -291,8 +291,7 @@ void wavefront_aligner_init_wf_m(
   // Initialize end2end (wavefront zero)
   wf_components->mwavefronts[0] = wavefront_slab_allocate(wavefront_slab,effective_lo,effective_hi);
   wf_components->mwavefronts[0]->offsets[0] = 0;
-  wf_components->mwavefronts[0]->lo = lo;
-  wf_components->mwavefronts[0]->hi = hi;
+  wavefront_set_limits(wf_components->mwavefronts[0],lo,hi);
   // Store initial BT-piggypack element
   if (wf_components->bt_piggyback) {
     const bt_block_idx_t block_idx = wf_backtrace_buffer_init_block(wf_components->bt_buffer,0,0);
