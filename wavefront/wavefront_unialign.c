@@ -144,6 +144,24 @@ bool wavefront_unialign_reached_limits(
 /*
  * Terminate alignment (backtrace)
  */
+static bool wavefront_unialign_set_xdrop_end(
+    wavefront_aligner_t* const wf_aligner) {
+  wavefront_heuristic_t* const wf_heuristic = &wf_aligner->heuristic;
+  wavefront_pos_t* const end_pos = &wf_aligner->alignment_end_pos;
+  if (wf_aligner->align_status.status != WF_STATUS_END_UNREACHABLE) return false;
+  if (end_pos->offset != WAVEFRONT_OFFSET_NULL) return false;
+  if (!(wf_heuristic->strategy & wf_heuristic_xdrop)) return false;
+  if (wf_heuristic->max_sw_score_k == DPMATRIX_DIAGONAL_NULL ||
+      wf_heuristic->max_sw_score_offset == WAVEFRONT_OFFSET_NULL) return false;
+  // Piggyback modes have evicted the best cell's wavefront; use its pinned backtrace.
+  if (wf_aligner->alignment_scope == compute_alignment &&
+      wf_aligner->wf_components.bt_piggyback &&
+      wf_aligner->wf_components.bt_pinned_prev == BT_BLOCK_IDX_NULL) return false;
+  end_pos->score = wf_heuristic->max_wf_score;
+  end_pos->k = wf_heuristic->max_sw_score_k;
+  end_pos->offset = wf_heuristic->max_sw_score_offset;
+  return true;
+}
 static int wavefront_unialign_termination_score(
     wavefront_aligner_t* const wf_aligner,
     const int score) {
@@ -171,7 +189,10 @@ void wavefront_unialign_terminate(
   const int pattern_length = sequences->pattern_length;
   const int text_length = sequences->text_length;
   cigar_t* const cigar = wf_aligner->cigar;
-  const int alignment_score = wavefront_unialign_termination_score(wf_aligner,score);
+  const bool xdrop_end = wavefront_unialign_set_xdrop_end(wf_aligner);
+  const int alignment_score = (xdrop_end) ?
+      wf_aligner->alignment_end_pos.score :
+      wavefront_unialign_termination_score(wf_aligner,score);
   // Select alignment scope
   align_status->score = alignment_score;
   if (wf_aligner->alignment_scope == compute_score) {
@@ -206,7 +227,13 @@ void wavefront_unialign_terminate(
     const int alignment_end_k = wf_aligner->alignment_end_pos.k;
     const wf_offset_t alignment_end_offset = wf_aligner->alignment_end_pos.offset;
     if (alignment_end_offset != WAVEFRONT_OFFSET_NULL) {
-      if (wf_components->bt_piggyback) {
+      if (wf_components->bt_piggyback && xdrop_end) {
+        // Backtrace alignment from the pinned X-drop best cell
+        wavefront_backtrace_pcigar(
+            wf_aligner,alignment_end_k,alignment_end_offset,
+            wf_components->bt_pinned_pcigar,
+            wf_components->bt_pinned_prev);
+      } else if (wf_components->bt_piggyback) {
         // Fetch wavefront
         const bool memory_modular = wf_aligner->wf_components.memory_modular;
         const int max_score_scope = wf_aligner->wf_components.max_score_scope;

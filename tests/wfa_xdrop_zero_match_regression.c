@@ -29,13 +29,14 @@ static const char text[] =
     "ATGAGATCGCCCCCTGACTTGGGACCAGAAGTCTTATACAAGTACGGAGATGGTAAGTTTGCTG"
     "TTCGACTGAACGCTTCCTCGATTAGATCCTCGTCCTACAC";
 
-static xdrop_result_t align_xdrop(
+static xdrop_result_t align_xdrop_mode(
     const distance_metric_t distance_metric,
+    const wavefront_memory_t memory_mode,
     const int match,
     const int xdrop) {
   wavefront_aligner_attr_t attributes = wavefront_aligner_attr_default;
   attributes.distance_metric = distance_metric;
-  attributes.memory_mode = wavefront_memory_high;
+  attributes.memory_mode = memory_mode;
   attributes.alignment_scope = compute_alignment;
   attributes.heuristic.strategy = wf_heuristic_none;
   attributes.system.check_alignment_correct = true;
@@ -79,6 +80,35 @@ static xdrop_result_t align_xdrop(
   return result;
 }
 
+static xdrop_result_t align_xdrop(
+    const distance_metric_t distance_metric,
+    const int match,
+    const int xdrop) {
+  return align_xdrop_mode(distance_metric,wavefront_memory_high,match,xdrop);
+}
+
+static int check_xdrop_exhausted(
+    const char* const label,
+    const distance_metric_t distance_metric,
+    const wavefront_memory_t memory_mode,
+    const int match,
+    const int xdrop_threshold) {
+  const xdrop_result_t xdrop =
+      align_xdrop_mode(distance_metric,memory_mode,match,xdrop_threshold);
+  const bool xdrop_ok =
+      xdrop.status == WF_STATUS_ALG_PARTIAL &&
+      xdrop.cigar_valid &&
+      xdrop.end_v > 0 && xdrop.end_h > 0;
+  if (!xdrop_ok) {
+    fprintf(stderr,
+        "%s (memory mode %d) X-drop exhausted every diagonal without an alignment: "
+        "(%d,%d,%d,%d,%d)\n",
+        label,memory_mode,
+        xdrop.status,xdrop.score,xdrop.end_v,xdrop.end_h,xdrop.cigar_valid);
+  }
+  return !xdrop_ok;
+}
+
 static int check_xdrop_matches_baseline(
     const char* const label,
     const distance_metric_t distance_metric,
@@ -119,5 +149,17 @@ int main(void) {
       "M=-1 affine",gap_affine,-1,100);
   failed |= check_xdrop_matches_baseline(
       "M=-1 affine-2p",gap_affine_2p,-1,100);
+  const wavefront_memory_t memory_modes[] = {
+      wavefront_memory_high,wavefront_memory_med,
+      wavefront_memory_low,wavefront_memory_singletrack};
+  int i;
+  for (i=0;i<4;++i) {
+    failed |= check_xdrop_exhausted(
+        "M=0 affine",gap_affine,memory_modes[i],0,1);
+    failed |= check_xdrop_exhausted(
+        "M=-1 affine",gap_affine,memory_modes[i],-1,10);
+    failed |= check_xdrop_exhausted(
+        "M=-1 affine-2p",gap_affine_2p,memory_modes[i],-1,10);
+  }
   return failed;
 }

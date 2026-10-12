@@ -317,7 +317,7 @@ void wf_heuristic_compute_sw_scores(
     wf_offset_t* const max_offset) {
   // Parameters
   const int wf_match = wf_aligner->penalties.match;
-  const int swg_match = (wf_match!=0) ? -(wf_aligner->penalties.match) : -1;
+  const int swg_match = (wf_match!=0) ? -(wf_aligner->penalties.match) : 1;
   // Compute min-distance
   const wf_offset_t* const offsets = wavefront->offsets;
   int k, cmax_sw_score = INT_MIN, cmax_k = 0, cmax_offset = 0;
@@ -339,6 +339,25 @@ void wf_heuristic_compute_sw_scores(
   *max_k = cmax_k;
   *max_offset = cmax_offset;
 }
+static void wf_heuristic_xdrop_set_max(
+    wavefront_aligner_t* const wf_aligner,
+    wavefront_t* const wavefront,
+    const int score,
+    const int sw_score,
+    const int k,
+    const wf_offset_t offset) {
+  wavefront_heuristic_t* const wf_heuristic = &wf_aligner->heuristic;
+  wf_heuristic->max_sw_score = sw_score;
+  wf_heuristic->max_wf_score = score;
+  wf_heuristic->max_sw_score_k = k;
+  wf_heuristic->max_sw_score_offset = offset;
+  // Piggyback modes evict old wavefronts, so pin the traceback of the best cell
+  wavefront_components_t* const wf_components = &wf_aligner->wf_components;
+  if (wf_components->bt_piggyback && sw_score != INT_MIN) {
+    wf_components->bt_pinned_pcigar = wavefront->bt_pcigar[k];
+    wf_components->bt_pinned_prev = wavefront->bt_prev[k];
+  }
+}
 void wavefront_heuristic_xdrop(
     wavefront_aligner_t* const wf_aligner,
     wavefront_t* const wavefront,
@@ -353,10 +372,10 @@ void wavefront_heuristic_xdrop(
   wavefront_components_resize_null__victim(&wf_aligner->wf_components,base_lo-1,base_hi+1);
   wf_offset_t* const sw_scores = wf_aligner->wf_components.wavefront_victim->offsets;
   // Compute SW scores
-  wf_offset_t cmax_sw_score, cmax_k, dummy;
+  wf_offset_t cmax_sw_score, cmax_k, cmax_offset;
   wf_heuristic_compute_sw_scores(
       wf_aligner,wavefront,score,sw_scores,
-      &cmax_sw_score,&cmax_k,&dummy);
+      &cmax_sw_score,&cmax_k,&cmax_offset);
   // Apply X-Drop
   const int xdrop = wf_heuristic->xdrop;
   const int max_sw_score = wf_heuristic->max_sw_score;
@@ -383,13 +402,11 @@ void wavefront_heuristic_xdrop(
     wavefront->hi = k;
     // Update maximum score observed
     if (cmax_sw_score > wf_heuristic->max_sw_score) {
-      wf_heuristic->max_sw_score = cmax_sw_score;
-      wf_heuristic->max_sw_score_k = cmax_k;
+      wf_heuristic_xdrop_set_max(wf_aligner,wavefront,score,cmax_sw_score,cmax_k,cmax_offset);
     }
   } else {
     // Update maximum score observed
-    wf_heuristic->max_sw_score = cmax_sw_score;
-    wf_heuristic->max_sw_score_k = cmax_k;
+    wf_heuristic_xdrop_set_max(wf_aligner,wavefront,score,cmax_sw_score,cmax_k,cmax_offset);
   }
   // Set wait steps (don't repeat this heuristic often)
   wf_heuristic->steps_wait = wf_heuristic->steps_between_cutoffs;

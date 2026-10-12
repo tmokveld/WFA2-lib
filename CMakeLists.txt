@@ -318,6 +318,15 @@ add_test(
   COMMAND wfa_zdrop_piggyback_regression
 )
 
+add_executable(wfa_xdrop_zero_match_regression
+  tests/wfa_xdrop_zero_match_regression.c
+)
+target_link_libraries(wfa_xdrop_zero_match_regression wfa2_static m)
+add_test(
+  NAME wfa_xdrop_zero_match_regression
+  COMMAND wfa_xdrop_zero_match_regression
+)
+
 add_executable(wfa_pcigar_extend_regression
   tests/wfa_pcigar_extend_regression.c
 )

@@ -58,6 +58,8 @@ typedef struct {
   wavefront_t* wavefront_victim;               // Dummy wavefront (orthogonal writing)
   // BT-Buffer
   wf_backtrace_buffer_t* bt_buffer;            // Backtrace Buffer
+  pcigar_t bt_pinned_pcigar;                   // Pinned backtrace outside the wavefronts (X-drop best cell)
+  bt_block_idx_t bt_pinned_prev;               // Pinned backtrace previous BT-block (kept across compactions)
   // MM
   mm_allocator_t* mm_allocator;                // MM-Allocator
 } wavefront_components_t;

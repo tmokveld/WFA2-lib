@@ -224,6 +224,7 @@ void wavefront_components_allocate(
   wf_components->wavefront_null = wavefront_null;
   // BT-Buffer
   wf_components->bt_buffer = (bt_piggyback) ? wf_backtrace_buffer_new(mm_allocator) : NULL;
+  wf_components->bt_pinned_prev = BT_BLOCK_IDX_NULL;
 }
 void wavefront_components_reap(
     wavefront_components_t* const wf_components) {
@@ -298,6 +299,7 @@ void wavefront_components_resize(
   } else {
     wavefront_components_clear(wf_components);
   }
+  wf_components->bt_pinned_prev = BT_BLOCK_IDX_NULL;
 }
 void wavefront_components_resize_null__victim(
     wavefront_components_t* const wf_components,
@@ -371,6 +373,10 @@ void wavefront_components_mark_wavefronts(
       }
     }
   }
+  // Mark pinned backtrace
+  if (wf_components->bt_pinned_prev != BT_BLOCK_IDX_NULL) {
+    wf_backtrace_buffer_mark_backtrace(bt_buffer,wf_components->bt_pinned_prev,bitmap);
+  }
   // Update counters in marked bitmap
   bitmap_update_counters(bitmap);
 }
@@ -424,6 +430,13 @@ void wavefront_components_translate_wavefronts(
         if (d2wavefront!=NULL) wavefront_components_translate_idx(wf_components,bitmap,d2wavefront);
       }
     }
+  }
+  // Translate pinned backtrace
+  const bt_block_idx_t num_compacted_blocks = wf_components->bt_buffer->num_compacted_blocks;
+  if (wf_components->bt_pinned_prev != BT_BLOCK_IDX_NULL &&
+      wf_components->bt_pinned_prev >= num_compacted_blocks) {
+    wf_components->bt_pinned_prev =
+        num_compacted_blocks + bitmap_erank(bitmap,wf_components->bt_pinned_prev);
   }
 }
 /*
