@@ -52,6 +52,8 @@ typedef struct {
   int current_wf_length;           // Current wf-elements allocated
   vector_t* wavefronts;            // All wavefronts (wavefront_t*)
   vector_t* wavefronts_free;       // Free wavefronts (wavefront_t*)
+  vector_t* wavefronts_busy;       // Handed out since the last clear (wavefront_t*)
+  bool dirty;                      // Length change or deallocation since the last clear
   // Stats
   uint64_t memory_used;            // Memory used (Bytes)
   // MM

@@ -84,6 +84,22 @@ do
     run_benchmark $BIN -i $INPUT -o $OUTPUT/$NAME.affine.wfapt1.alg -a gap-affine-wfa $MODE --wfa-heuristic=wfa-adaptive --wfa-heuristic-parameters=10,50,10
 done
 
+# X-drop may choose different valid heuristic paths across implementations.
+# Check CIGAR validity rather than pinning scores or traceback choices.
+for MEMORY_MODE in high med ultralow
+do
+    echo ">>> Testing X-drop CIGARs ($MEMORY_MODE)"
+    if ! "$BIN" -i "$INPUT" -a gap-affine-wfa --check=correct \
+        --wfa-memory="$MEMORY_MODE" --affine-penalties="-2,3,1,4" \
+        --wfa-heuristic=xdrop --wfa-heuristic-parameters=20,2 > "$LOG.xdrop" 2>&1 ||
+        ! grep -q 'Alignments.Correct.*(100.00 %)' "$LOG.xdrop"
+    then
+        cat "$LOG.xdrop"
+        exit 1
+    fi
+    cat "$LOG.xdrop" >> "$LOG"
+done
+
 # Intra-tests
 diff $PREFIX/wfa.utest.check/test.edit.alg      $PREFIX/wfa.utest.check/test.pb.edit.alg >> $LOG.correct 2>&1
 diff $PREFIX/wfa.utest.check/test.indel.alg     $PREFIX/wfa.utest.check/test.pb.indel.alg >> $LOG.correct 2>&1

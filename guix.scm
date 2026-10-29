@@ -66,7 +66,7 @@
        ("gdb" ,gdb)))
     (native-inputs
      `(("pkg-config" ,pkg-config)))
-    (home-page "https://github.com/smarco/WFA2-lib/")
+    (home-page "https://github.com/Marco-Sola-Lab/WFA2-lib/")
     (synopsis "Library for wavefront aligner")
     (description "The wavefront alignment (WFA) algorithm is an **exact** gap-affine algorithm that takes advantage of homologous regions between the sequences to accelerate the alignment process. Unlike to traditional dynamic programming algorithms that run in quadratic time, the WFA runs in time `O(ns+s^2)`, proportional to the sequence length `n` and the alignment score `s`, using `O(s^2)` memory (or `O(s)` using the ultralow/BiWFA mode).")
     (license license:expat))) ;; MIT license

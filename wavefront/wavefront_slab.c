@@ -58,6 +58,8 @@ wavefront_slab_t* wavefront_slab_new(
   wavefront_slab->current_wf_length = init_wf_length;
   wavefront_slab->wavefronts = vector_new(WF_SLAB_QUEUES_LENGTH_INIT,wavefront_t*);
   wavefront_slab->wavefronts_free = vector_new(WF_SLAB_QUEUES_LENGTH_INIT,wavefront_t*);
+  wavefront_slab->wavefronts_busy = vector_new(WF_SLAB_QUEUES_LENGTH_INIT,wavefront_t*);
+  wavefront_slab->dirty = true;
   // Stats
   wavefront_slab->memory_used = 0;
   // MM
@@ -90,6 +92,7 @@ void wavefront_slab_reap_free(
   }
   vector_set_used(wavefront_slab->wavefronts,valid_idx);
   vector_clear(wavefront_slab->wavefronts_free);
+  wavefront_slab->dirty = true;
 }
 void wavefront_slab_reap_repurpose(
     wavefront_slab_t* const wavefront_slab) {
@@ -125,6 +128,8 @@ void wavefront_slab_reap_repurpose(
   }
   vector_set_used(wavefront_slab->wavefronts,valid_idx);
   vector_set_used(wavefront_slab->wavefronts_free,valid_idx);
+  vector_clear(wavefront_slab->wavefronts_busy);
+  wavefront_slab->dirty = false;
 }
 void wavefront_slab_reap(
     wavefront_slab_t* const wavefront_slab) {
@@ -137,12 +142,26 @@ void wavefront_slab_clear(
   // Select slab mode
   switch (wavefront_slab->slab_mode) {
     case wf_slab_reuse:
-      wavefront_slab_reap_repurpose(wavefront_slab);
-      break;
     case wf_slab_tight:
-      // Back to initial size
-      wavefront_slab->current_wf_length = wavefront_slab->init_wf_length;
-      wavefront_slab_reap_repurpose(wavefront_slab);
+      if (wavefront_slab->dirty ||
+          (wavefront_slab->slab_mode == wf_slab_tight &&
+           wavefront_slab->current_wf_length != wavefront_slab->init_wf_length)) {
+        if (wavefront_slab->slab_mode == wf_slab_tight) {
+          wavefront_slab->current_wf_length = wavefront_slab->init_wf_length;
+        }
+        wavefront_slab_reap_repurpose(wavefront_slab);
+      } else {
+        wavefront_t** const busy = vector_get_mem(wavefront_slab->wavefronts_busy,wavefront_t*);
+        const int num_busy = vector_get_used(wavefront_slab->wavefronts_busy);
+        int i;
+        for (i=0;i<num_busy;++i) {
+          if (busy[i]->status == wavefront_status_busy) {
+            busy[i]->status = wavefront_status_free;
+            vector_insert(wavefront_slab->wavefronts_free,busy[i],wavefront_t*);
+          }
+        }
+        vector_clear(wavefront_slab->wavefronts_busy);
+      }
       break;
   }
 }
@@ -152,6 +171,7 @@ void wavefront_slab_delete(
   mm_allocator_t* const mm_allocator = wavefront_slab->mm_allocator;
   // Delete free vector
   vector_delete(wavefront_slab->wavefronts_free);
+  vector_delete(wavefront_slab->wavefronts_busy);
   // Free wavefronts
   wavefront_t** const wavefronts =
       vector_get_mem(wavefront_slab->wavefronts,wavefront_t*);
@@ -197,6 +217,8 @@ wavefront_t* wavefront_slab_allocate_new(
   wavefront_t* const wavefront = mm_allocator_alloc(mm_allocator,wavefront_t);
   wavefront_allocate(wavefront,wf_length_requested,wavefront_slab->allocate_backtrace,mm_allocator);
   vector_insert(wavefront_slab->wavefronts,wavefront,wavefront_t*);
+  vector_insert(wavefront_slab->wavefronts_busy,wavefront,wavefront_t*);
+  if (wf_length_requested != wavefront_slab->current_wf_length) wavefront_slab->dirty = true;
   wavefront_slab->memory_used += wavefront_get_size(wavefront);
   // Init wavefront
   wavefront->status = wavefront_status_busy;
@@ -213,6 +235,7 @@ wavefront_t* wavefront_slab_allocate_free(
   // Reuse wavefront
   wavefront_t* const wavefront = *(vector_get_last_elm(wavefronts_free,wavefront_t*));
   vector_dec_used(wavefronts_free);
+  vector_insert(wavefront_slab->wavefronts_busy,wavefront,wavefront_t*);
   // Init wavefront
   wavefront->status = wavefront_status_busy;
   wavefront_init(wavefront,min_lo,max_hi);
@@ -277,6 +300,7 @@ void wavefront_slab_free(
   } else {
     // Delete wavefront
     wavefront->status = wavefront_status_deallocated;
+    wavefront_slab->dirty = true;
     wavefront_slab->memory_used -= wavefront_get_size(wavefront);
     wavefront_free(wavefront,wavefront_slab->mm_allocator);
   }

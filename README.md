@@ -21,7 +21,7 @@ The WFA2 library implements the WFA algorithm for different distance metrics and
 Git clone and compile the library, tools, and examples (by default, use `cmake` for the library and benchmark build).
 
 ```
-git clone https://github.com/smarco/WFA2-lib
+git clone https://github.com/Marco-Sola-Lab/WFA2-lib
 cd WFA2-lib
 mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
@@ -39,7 +39,7 @@ cmake .. -DCMAKE_BUILD_TYPE=Release -DEXTRA_FLAGS="-ftree-vectorizer-verbose=5"
 Alternatively, the simple Makefile build system can be used.
 
 ```
-git clone https://github.com/smarco/WFA2-lib
+git clone https://github.com/Marco-Sola-Lab/WFA2-lib
 cd WFA2-lib
 make clean all
 ```
@@ -67,6 +67,7 @@ Section [WFA2-lib features](#wfa2.features) explores the most relevant options a
 ### 1.5 Important notes and clarifications
 
 - The WFA algorithm is an **exact algorithm**. If no heuristic is applied (e.g., band or adaptive pruning), the core algorithm guarantees to always find the optimal solution (i.e., best alignment score). Since its first release, some authors have incorrectly referred to the WFA as approximated or heuristic; this is not the case.
+  The default attributes (`wavefront_aligner_attr_default`) enable `wf-adaptive`, and the C++ `WFAligner` constructors use the same defaults. To disable heuristics and retain the no-heuristic exactness guarantee, set `attributes.heuristic.strategy = wf_heuristic_none` (C) or call `setHeuristicNone()` (C++).
 
 
 - Given two sequences of length `n`, traditional dynamic-programming (DP) based methods (like Smith-Waterman or Needleman-Wunsch) compute the optimal alignment in `O(n^2)` time, using `O(n^2)` memory. In contrast, the WFA algorithm requires `O(ns+s^2)` time and `O(s^2)` memory (with `s` the optimal alignment score). Therefore, **the memory consumption of the WFA algorithm is not intrinsically higher than that of other methods**. Most DP-based methods can use heuristics (like banded, X-drop, or Z-drop) to reduce the execution time and the memory usage at the expense of losing accuracy. Likewise, **the WFA algorithm can also use heuristics to reduce the execution time and memory usage**. Moreover, the memory mode `ultralow` uses the BiWFA algorithm to execute in `O(ns+s^2)` time and linear `O(s)` memory.
