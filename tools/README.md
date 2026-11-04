@@ -188,6 +188,12 @@ checkout branch `benchmark`.
 #### - Wavefront parameters
 
 ```                                                                  
+          --wfa-memory high|med|low|ultralow|singletrack
+            Selects the WFA memory mode. The singletrack mode is available for
+            full-alignment global, ends-free, and extension gap-affine and dual
+            gap-affine alignments, including the wf-adaptive, drop, and banded
+            heuristics. It requires ASCII or packed2bits inputs.
+
           --minimum-wavefront-length <INT>
             Selects the minimum wavefront length to trigger the WFA-Adapt reduction method.
             
