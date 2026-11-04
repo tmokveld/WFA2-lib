@@ -193,6 +193,21 @@ void wavefront_unialign_terminate(
         if (wf_aligner->penalties.distance_metric <= gap_linear) {
           wavefront_backtrace_linear(wf_aligner,
               score,alignment_end_k,alignment_end_offset);
+        } else if (wf_aligner->memory_mode == wavefront_memory_singletrack) {
+          // Drop heuristics (Z-drop) can select an endpoint reached at an
+          // earlier score. The M-only traceback must start from that score.
+          const int alignment_end_score =
+              (align_status->status == WF_STATUS_END_UNREACHABLE &&
+               wf_aligner->alignment_end_pos.score >= 0) ?
+                  wf_aligner->alignment_end_pos.score : score;
+          if (!wavefront_backtrace_affine_m_only(wf_aligner,
+                  wf_aligner->component_begin,wf_aligner->component_end,
+                  alignment_end_score,alignment_end_k,alignment_end_offset)) {
+            align_status->dropped =
+                (align_status->status == WF_STATUS_END_UNREACHABLE);
+            align_status->status = WF_STATUS_UNATTAINABLE;
+            return;
+          }
         } else {
           wavefront_backtrace_affine(wf_aligner,
               wf_aligner->component_begin,wf_aligner->component_end,
