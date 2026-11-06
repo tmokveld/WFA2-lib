@@ -64,6 +64,28 @@ do
     \time -v $BIN -i $INPUT -o $OUTPUT/$NAME.affine.xdrop.alg -a gap-affine-wfa $MODE --affine-penalties="-2,3,1,4" --wfa-heuristic=xdrop --wfa-heuristic-parameters=20,2 >> $LOG 2>&1
 done
 
+# Singletrack (gap-affine and gap-affine-2p only)
+MODE="--wfa-memory=singletrack --check=correct"
+NAME="test.singletrack"
+echo ">>> Testing '$NAME' ($MODE)"
+\time -v $BIN -i $INPUT -o $OUTPUT/$NAME.affine.alg   -a gap-affine-wfa   $MODE >> $LOG 2>&1
+\time -v $BIN -i $INPUT -o $OUTPUT/$NAME.affine2p.alg -a gap-affine2p-wfa $MODE >> $LOG 2>&1
+\time -v $BIN -i $INPUT -o $OUTPUT/$NAME.affine.p0.alg -a gap-affine-wfa $MODE --affine-penalties="0,1,2,1" >> $LOG 2>&1
+\time -v $BIN -i $INPUT -o $OUTPUT/$NAME.affine.p1.alg -a gap-affine-wfa $MODE --affine-penalties="0,3,1,4" >> $LOG 2>&1
+\time -v $BIN -i $INPUT -o $OUTPUT/$NAME.affine.p2.alg -a gap-affine-wfa $MODE --affine-penalties="0,5,3,2" >> $LOG 2>&1
+\time -v $BIN -i $INPUT -o $OUTPUT/$NAME.affine.p3.alg -a gap-affine-wfa $MODE --affine-penalties="-5,1,2,1" >> $LOG 2>&1
+\time -v $BIN -i $INPUT -o $OUTPUT/$NAME.affine.p4.alg -a gap-affine-wfa $MODE --affine-penalties="-2,3,1,4" >> $LOG 2>&1
+\time -v $BIN -i $INPUT -o $OUTPUT/$NAME.affine.p5.alg -a gap-affine-wfa $MODE --affine-penalties="-3,5,3,2" >> $LOG 2>&1
+\time -v $BIN -i $INPUT -o $OUTPUT/$NAME.affine.wfapt0.alg -a gap-affine-wfa $MODE --wfa-heuristic=wfa-adaptive --wfa-heuristic-parameters=10,50,1 >> $LOG 2>&1
+\time -v $BIN -i $INPUT -o $OUTPUT/$NAME.affine.wfapt1.alg -a gap-affine-wfa $MODE --wfa-heuristic=wfa-adaptive --wfa-heuristic-parameters=10,50,10 >> $LOG 2>&1
+\time -v $BIN -i $INPUT -o $OUTPUT/$NAME.affine.xdrop.alg -a gap-affine-wfa $MODE --affine-penalties="-2,3,1,4" --wfa-heuristic=xdrop --wfa-heuristic-parameters=20,2 >> $LOG 2>&1
+# Singletrack traceback paths (ends-free, extension, Z-drop, band)
+\time -v $BIN -i $INPUT -o $OUTPUT/$NAME.affine.endsfree.alg   -a gap-affine-wfa   $MODE --wfa-span=ends-free,5,5,5,5 >> $LOG 2>&1
+\time -v $BIN -i $INPUT -o $OUTPUT/$NAME.affine2p.endsfree.alg -a gap-affine2p-wfa $MODE --wfa-span=ends-free,5,5,5,5 >> $LOG 2>&1
+\time -v $BIN -i $INPUT -o $OUTPUT/$NAME.affine.extension.alg  -a gap-affine-wfa   $MODE --wfa-span=extension >> $LOG 2>&1
+\time -v $BIN -i $INPUT -o $OUTPUT/$NAME.affine.zdrop.alg -a gap-affine-wfa $MODE --affine-penalties="-2,3,1,4" --wfa-heuristic=zdrop --wfa-heuristic-parameters=20,2 >> $LOG 2>&1
+\time -v $BIN -i $INPUT -o $OUTPUT/$NAME.affine.banded.alg -a gap-affine-wfa $MODE --wfa-heuristic=banded-static --wfa-heuristic-parameters=-16,16 >> $LOG 2>&1
+
 # Intra-tests
 diff $PREFIX/wfa.utest.check/test.edit.alg      $PREFIX/wfa.utest.check/test.pb.edit.alg >> $LOG.correct 2>&1
 diff $PREFIX/wfa.utest.check/test.indel.alg     $PREFIX/wfa.utest.check/test.pb.indel.alg >> $LOG.correct 2>&1
@@ -89,6 +111,16 @@ $CMP_SCORE $PREFIX/wfa.utest.check/test.affine.p4.alg $PREFIX/wfa.utest.check/te
 $CMP_SCORE $PREFIX/wfa.utest.check/test.affine.p5.alg $PREFIX/wfa.utest.check/test.biwfa.affine.p5.alg >> $LOG.correct 2>&1
 $CMP_SCORE $PREFIX/wfa.utest.check/test.affine.wfapt0.alg $PREFIX/wfa.utest.check/test.biwfa.affine.wfapt0.alg >> $LOG.correct 2>&1
 $CMP_SCORE $PREFIX/wfa.utest.check/test.affine.wfapt1.alg $PREFIX/wfa.utest.check/test.biwfa.affine.wfapt1.alg >> $LOG.correct 2>&1
+$CMP_SCORE $PREFIX/wfa.utest.check/test.affine.alg    $PREFIX/wfa.utest.check/test.singletrack.affine.alg >> $LOG.correct 2>&1
+$CMP_SCORE $PREFIX/wfa.utest.check/test.affine2p.alg  $PREFIX/wfa.utest.check/test.singletrack.affine2p.alg >> $LOG.correct 2>&1
+$CMP_SCORE $PREFIX/wfa.utest.check/test.affine.p0.alg $PREFIX/wfa.utest.check/test.singletrack.affine.p0.alg >> $LOG.correct 2>&1
+$CMP_SCORE $PREFIX/wfa.utest.check/test.affine.p1.alg $PREFIX/wfa.utest.check/test.singletrack.affine.p1.alg >> $LOG.correct 2>&1
+$CMP_SCORE $PREFIX/wfa.utest.check/test.affine.p2.alg $PREFIX/wfa.utest.check/test.singletrack.affine.p2.alg >> $LOG.correct 2>&1
+$CMP_SCORE $PREFIX/wfa.utest.check/test.affine.p3.alg $PREFIX/wfa.utest.check/test.singletrack.affine.p3.alg >> $LOG.correct 2>&1
+$CMP_SCORE $PREFIX/wfa.utest.check/test.affine.p4.alg $PREFIX/wfa.utest.check/test.singletrack.affine.p4.alg >> $LOG.correct 2>&1
+$CMP_SCORE $PREFIX/wfa.utest.check/test.affine.p5.alg $PREFIX/wfa.utest.check/test.singletrack.affine.p5.alg >> $LOG.correct 2>&1
+$CMP_SCORE $PREFIX/wfa.utest.check/test.affine.wfapt0.alg $PREFIX/wfa.utest.check/test.singletrack.affine.wfapt0.alg >> $LOG.correct 2>&1
+$CMP_SCORE $PREFIX/wfa.utest.check/test.affine.wfapt1.alg $PREFIX/wfa.utest.check/test.singletrack.affine.wfapt1.alg >> $LOG.correct 2>&1
 
 # Summary tests (*.correct,*.time,*.mem)
 grep "Alignments.Correct" $LOG >> $LOG.correct
