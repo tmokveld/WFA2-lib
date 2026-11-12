@@ -62,6 +62,20 @@ static const uint64_t matches_lut = 0x4D4D4D4D4D4D4D4Dul; // Matches LUT = "MMMM
 static const uint64_t insertions_lut = 0x4949494949494949ul; // Insertions LUT = "IIIIIIII"
 static const uint64_t deletions_lut = 0x4444444444444444ul; // Deletions LUT = "DDDDDDDD"
 
+/**
+ * Retrieve the offset stored in the M wavefront of @p score at diagonal
+ * @p k. Scores are used directly as wavefront indices (no modular memory).
+ *
+ * @param wf_aligner The wavefront aligner.
+ * @param score The score of the M wavefront.
+ * @param k The diagonal.
+ * @param use_initialized_bounds If true, accept diagonals within the
+ * initialized range [wf_elements_init_min, wf_elements_init_max] instead of
+ * only the active range [lo, hi].
+ * @param offset Output: the offset at diagonal @p k.
+ * @return True if the offset exists, false if @p score is out of range, the
+ * wavefront is NULL, @p k is out of bounds, or the offset is null.
+ */
 static bool wavefront_backtrace_m_offset(
     wavefront_aligner_t* const wf_aligner,
     const int score,
@@ -583,6 +597,16 @@ void wavefront_backtrace_affine(
 /*
  * Backtrace (Singletrack: M-wavefronts only)
  */
+/**
+ * Count the consecutive matching characters that end at cell (@p v, @p h),
+ * walking backwards along the diagonal. The count is bounded by
+ * MIN(@p v, @p h) so it never reads before the start of either sequence.
+ *
+ * @param wf_aligner The wavefront aligner.
+ * @param v The pattern position (vertical coordinate) of the cell.
+ * @param h The text position (horizontal coordinate) of the cell.
+ * @return The number of consecutive matches ending at (@p v, @p h).
+ */
 static int wavefront_backtrace_singletrack_count_backward_matches(
     wavefront_aligner_t* const wf_aligner,
     const int v,
@@ -613,6 +637,18 @@ static int wavefront_backtrace_singletrack_count_backward_matches(
   return nmatches;
 }
 
+/**
+ * Check whether cell (@p v, @p h) is a free starting point of an ends-free
+ * alignment with a match bonus (match < 0). The cell must lie on the first
+ * row or column, within the begin-free limits, and @p score must equal the
+ * score assigned to that free starting cell.
+ *
+ * @param wf_aligner The wavefront aligner.
+ * @param score The remaining score of the traceback.
+ * @param v The pattern position (vertical coordinate) of the cell.
+ * @param h The text position (horizontal coordinate) of the cell.
+ * @return True if the traceback can stop at (@p v, @p h).
+ */
 static bool wavefront_backtrace_singletrack_is_begin_free(
     wavefront_aligner_t* const wf_aligner,
     const int score,
@@ -634,6 +670,14 @@ static bool wavefront_backtrace_singletrack_is_begin_free(
   return false;
 }
 
+/**
+ * Prepend to the CIGAR the leading free gap that reaches cell (@p v, @p h)
+ * from the origin: @p h insertions and @p v deletions.
+ *
+ * @param cigar The CIGAR.
+ * @param v The pattern position (vertical coordinate) of the cell.
+ * @param h The text position (horizontal coordinate) of the cell.
+ */
 static void wavefront_backtrace_singletrack_add_begin_free(
     cigar_t* const cigar,
     const int v,
@@ -647,6 +691,18 @@ static void wavefront_backtrace_singletrack_add_begin_free(
   }
 }
 
+/**
+ * If cell (@p v, @p h) is a free starting point (see
+ * wavefront_backtrace_singletrack_is_begin_free()), prepend its leading free
+ * gap to the CIGAR.
+ *
+ * @param wf_aligner The wavefront aligner.
+ * @param cigar The CIGAR.
+ * @param score The remaining score of the traceback.
+ * @param v The pattern position (vertical coordinate) of the cell.
+ * @param h The text position (horizontal coordinate) of the cell.
+ * @return True if the leading free gap was added and the traceback can stop.
+ */
 static bool wavefront_backtrace_singletrack_try_begin_free(
     wavefront_aligner_t* const wf_aligner,
     cigar_t* const cigar,
@@ -659,6 +715,19 @@ static bool wavefront_backtrace_singletrack_try_begin_free(
   wavefront_backtrace_singletrack_add_begin_free(cigar,v,h);
   return true;
 }
+
+/**
+ * Close the traceback of an ends-free alignment with a zero match penalty.
+ * If the diagonal of cell (@p v, @p h) is within the begin-free limits,
+ * prepend MIN(@p v, @p h) matches followed (backwards) by the leading free
+ * insertions or deletions that reach the origin.
+ *
+ * @param wf_aligner The wavefront aligner.
+ * @param cigar The CIGAR.
+ * @param v The pattern position (vertical coordinate) of the cell.
+ * @param h The text position (horizontal coordinate) of the cell.
+ * @return True if the remaining operations were added to the CIGAR.
+ */
 static bool wavefront_backtrace_singletrack_try_zero_begin_free(
     wavefront_aligner_t* const wf_aligner,
     cigar_t* const cigar,
@@ -680,6 +749,32 @@ static bool wavefront_backtrace_singletrack_try_zero_begin_free(
   }
   return false;
 }
+
+/**
+ * Find a predecessor of the current cell that ends with a gap, using only M
+ * wavefronts. For increasing gap lengths l, look for an M cell at score
+ * @p score - (gap_opening + l * gap_extension) from which an insertion
+ * (diagonal @p k - l) or deletion (diagonal @p k + l) of length l, followed
+ * by matches, reaches an offset in [@p offset_orig, @p offset]. Both gap
+ * penalty sets are tried for gap-affine-2p. On success, the matches and the
+ * gap are prepended to the CIGAR.
+ *
+ * @param wf_aligner The wavefront aligner.
+ * @param cigar The CIGAR.
+ * @param distance_metric The distance metric (gap_affine or gap_affine_2p).
+ * @param score The score of the current cell.
+ * @param k The diagonal of the current cell.
+ * @param offset The offset of the current cell.
+ * @param offset_orig The lowest offset reachable from @p offset by
+ * backward matches.
+ * @param use_initialized_bounds If true, search the initialized range of the
+ * M wavefronts instead of only the active [lo, hi] range.
+ * @param next_score Output: score of the predecessor M cell.
+ * @param next_k Output: diagonal of the predecessor M cell.
+ * @param next_offset Output: offset of the predecessor M cell.
+ * @return True if a predecessor was found, false once every candidate score
+ * is negative.
+ */
 static bool wavefront_backtrace_singletrack_try_indel(
     wavefront_aligner_t* const wf_aligner,
     cigar_t* const cigar,
@@ -693,8 +788,7 @@ static bool wavefront_backtrace_singletrack_try_indel(
     int* const next_k,
     wf_offset_t* const next_offset) {
   const wavefront_penalties_t* const penalties = &wf_aligner->penalties;
-  int l;
-  for (l=1;;++l) {
+  for (int l=1;;++l) {
     bool score_in_scope = false;
     const int k_ins = k - l;
     const int k_del = k + l;
@@ -764,6 +858,12 @@ static bool wavefront_backtrace_singletrack_try_indel(
   }
 }
 
+/**
+ * Return a temporary I/D wavefront to the slab and clear its slot.
+ *
+ * @param wf_aligner The wavefront aligner.
+ * @param wavefront_slot The slot holding the wavefront (may hold NULL).
+ */
 static void wavefront_backtrace_singletrack_free_temp(
     wavefront_aligner_t* const wf_aligner,
     wavefront_t** const wavefront_slot) {
@@ -772,6 +872,14 @@ static void wavefront_backtrace_singletrack_free_temp(
   *wavefront_slot = NULL;
 }
 
+/**
+ * Release every temporary I/D wavefront kept during a Singletrack alignment,
+ * for all scores in [0, @p alignment_score].
+ *
+ * @param wf_aligner The wavefront aligner.
+ * @param distance_metric The distance metric (gap_affine or gap_affine_2p).
+ * @param alignment_score The score of the alignment.
+ */
 static void wavefront_backtrace_singletrack_free_temps(
     wavefront_aligner_t* const wf_aligner,
     const distance_metric_t distance_metric,
@@ -985,6 +1093,7 @@ cleanup:
       wf_aligner,distance_metric,alignment_score);
   return completed;
 }
+
 /*
  * Backtrace from BT-Buffer (pcigar)
  */

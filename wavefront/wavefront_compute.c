@@ -425,6 +425,22 @@ void wavefront_compute_allocate_output_null(
   wf_components->i2wavefronts[score_mod] = NULL;
   wf_components->d2wavefronts[score_mod] = NULL;
 }
+
+/**
+ * Allocate an output I/D wavefront for Singletrack mode, recycling the
+ * wavefront in @p candidate_slot (one that left the I/D scope) when it is
+ * large enough. Otherwise, the candidate is returned to the slab and a new
+ * wavefront is allocated. The candidate slot is always cleared.
+ *
+ * @param wf_aligner The wavefront aligner.
+ * @param candidate_slot The slot holding the wavefront to recycle (may hold
+ * NULL).
+ * @param effective_lo The lowest diagonal to allocate.
+ * @param effective_hi The highest diagonal to allocate.
+ * @param lo The lowest active diagonal.
+ * @param hi The highest active diagonal.
+ * @return The output wavefront.
+ */
 static wavefront_t* wavefront_compute_singletrack_allocate_temp(
     wavefront_aligner_t* const wf_aligner,
     wavefront_t** const candidate_slot,
