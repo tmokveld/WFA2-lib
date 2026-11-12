@@ -200,7 +200,7 @@ void wavefront_unialign_terminate(
               (align_status->status == WF_STATUS_END_UNREACHABLE &&
                wf_aligner->alignment_end_pos.score >= 0) ?
                   wf_aligner->alignment_end_pos.score : score;
-          if (!wavefront_backtrace_affine_m_only(wf_aligner,
+          if (!wavefront_backtrace_affine_singletrack(wf_aligner,
                   wf_aligner->component_begin,wf_aligner->component_end,
                   alignment_end_score,alignment_end_k,alignment_end_offset)) {
             align_status->dropped =

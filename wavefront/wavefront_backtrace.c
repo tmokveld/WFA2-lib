@@ -583,7 +583,7 @@ void wavefront_backtrace_affine(
 /*
  * Backtrace (Singletrack: M-wavefronts only)
  */
-static int wavefront_backtrace_m_only_count_backward_matches(
+static int wavefront_backtrace_singletrack_count_backward_matches(
     wavefront_aligner_t* const wf_aligner,
     const int v,
     const int h) {
@@ -613,7 +613,7 @@ static int wavefront_backtrace_m_only_count_backward_matches(
   return nmatches;
 }
 
-static bool wavefront_backtrace_m_only_is_begin_free(
+static bool wavefront_backtrace_singletrack_is_begin_free(
     wavefront_aligner_t* const wf_aligner,
     const int score,
     const int v,
@@ -634,7 +634,7 @@ static bool wavefront_backtrace_m_only_is_begin_free(
   return false;
 }
 
-static void wavefront_backtrace_m_only_add_begin_free(
+static void wavefront_backtrace_singletrack_add_begin_free(
     cigar_t* const cigar,
     const int v,
     const int h) {
@@ -647,19 +647,19 @@ static void wavefront_backtrace_m_only_add_begin_free(
   }
 }
 
-static bool wavefront_backtrace_m_only_try_begin_free(
+static bool wavefront_backtrace_singletrack_try_begin_free(
     wavefront_aligner_t* const wf_aligner,
     cigar_t* const cigar,
     const int score,
     const int v,
     const int h) {
-  if (!wavefront_backtrace_m_only_is_begin_free(wf_aligner,score,v,h)) {
+  if (!wavefront_backtrace_singletrack_is_begin_free(wf_aligner,score,v,h)) {
     return false;
   }
-  wavefront_backtrace_m_only_add_begin_free(cigar,v,h);
+  wavefront_backtrace_singletrack_add_begin_free(cigar,v,h);
   return true;
 }
-static bool wavefront_backtrace_m_only_try_zero_begin_free(
+static bool wavefront_backtrace_singletrack_try_zero_begin_free(
     wavefront_aligner_t* const wf_aligner,
     cigar_t* const cigar,
     const int v,
@@ -680,7 +680,7 @@ static bool wavefront_backtrace_m_only_try_zero_begin_free(
   }
   return false;
 }
-static bool wavefront_backtrace_m_only_try_indel(
+static bool wavefront_backtrace_singletrack_try_indel(
     wavefront_aligner_t* const wf_aligner,
     cigar_t* const cigar,
     const distance_metric_t distance_metric,
@@ -764,7 +764,7 @@ static bool wavefront_backtrace_m_only_try_indel(
   }
 }
 
-static void wavefront_backtrace_m_only_free_temp(
+static void wavefront_backtrace_singletrack_free_temp(
     wavefront_aligner_t* const wf_aligner,
     wavefront_t** const wavefront_slot) {
   if (*wavefront_slot == NULL) return;
@@ -772,7 +772,7 @@ static void wavefront_backtrace_m_only_free_temp(
   *wavefront_slot = NULL;
 }
 
-static void wavefront_backtrace_m_only_free_temps(
+static void wavefront_backtrace_singletrack_free_temps(
     wavefront_aligner_t* const wf_aligner,
     const distance_metric_t distance_metric,
     const int alignment_score) {
@@ -781,15 +781,15 @@ static void wavefront_backtrace_m_only_free_temps(
   for (i=0;i<=alignment_score;++i) {
     if (distance_metric == gap_affine ||
         distance_metric == gap_affine_2p) {
-      wavefront_backtrace_m_only_free_temp(
+      wavefront_backtrace_singletrack_free_temp(
           wf_aligner,&wf_components->i1wavefronts[i]);
-      wavefront_backtrace_m_only_free_temp(
+      wavefront_backtrace_singletrack_free_temp(
           wf_aligner,&wf_components->d1wavefronts[i]);
     }
     if (distance_metric == gap_affine_2p) {
-      wavefront_backtrace_m_only_free_temp(
+      wavefront_backtrace_singletrack_free_temp(
           wf_aligner,&wf_components->i2wavefronts[i]);
-      wavefront_backtrace_m_only_free_temp(
+      wavefront_backtrace_singletrack_free_temp(
           wf_aligner,&wf_components->d2wavefronts[i]);
     }
   }
@@ -812,7 +812,7 @@ static void wavefront_backtrace_m_only_free_temps(
  * starts.
  * @return True if traceback completed, false if no valid predecessor was found.
  */
-bool wavefront_backtrace_affine_m_only(
+bool wavefront_backtrace_affine_singletrack(
     wavefront_aligner_t* const wf_aligner,
     const affine2p_matrix_type component_begin,
     const affine2p_matrix_type component_end,
@@ -865,7 +865,7 @@ bool wavefront_backtrace_affine_m_only(
       v = WAVEFRONT_V(k, offset);
       h = WAVEFRONT_H(k, offset);
 
-      if (wavefront_backtrace_m_only_try_begin_free(
+      if (wavefront_backtrace_singletrack_try_begin_free(
               wf_aligner,cigar,score,v,h)) {
         score = 0;
         k = 0;
@@ -874,16 +874,16 @@ bool wavefront_backtrace_affine_m_only(
       }
 
       nmatches =
-          wavefront_backtrace_m_only_count_backward_matches(wf_aligner,v,h);
+          wavefront_backtrace_singletrack_count_backward_matches(wf_aligner,v,h);
 
       offset_orig = offset - nmatches;
 
       const int v_orig = WAVEFRONT_V(k, offset_orig);
       const int h_orig = WAVEFRONT_H(k, offset_orig);
-      if (wavefront_backtrace_m_only_is_begin_free(
+      if (wavefront_backtrace_singletrack_is_begin_free(
               wf_aligner,score,v_orig,h_orig)) {
         wavefront_backtrace_add_lut_to_cigar(cigar, matches_lut, nmatches);
-        wavefront_backtrace_m_only_add_begin_free(cigar,v_orig,h_orig);
+        wavefront_backtrace_singletrack_add_begin_free(cigar,v_orig,h_orig);
         score = 0;
         k = 0;
         offset = 0;
@@ -900,7 +900,7 @@ bool wavefront_backtrace_affine_m_only(
     for (pass=0;pass<2 && !found;++pass) {
       const bool use_initialized_bounds = (pass == 1);
       if (gaps_first) {
-        found = wavefront_backtrace_m_only_try_indel(
+        found = wavefront_backtrace_singletrack_try_indel(
             wf_aligner,cigar,distance_metric,
             score,k,offset,offset_orig,use_initialized_bounds,
             &score,&k,&offset);
@@ -923,7 +923,7 @@ bool wavefront_backtrace_affine_m_only(
       if (!gaps_first) {
         // Gaps may precede any part of the backward match run, because M
         // stores only the furthest offset after forward extension.
-        found = wavefront_backtrace_m_only_try_indel(
+        found = wavefront_backtrace_singletrack_try_indel(
             wf_aligner,cigar,distance_metric,
             score,k,offset,offset_orig,use_initialized_bounds,
             &score,&k,&offset);
@@ -947,7 +947,7 @@ bool wavefront_backtrace_affine_m_only(
   v = WAVEFRONT_V(k, offset);
   h = WAVEFRONT_H(k, offset);
   if (in_mmatrix) {
-    if (wavefront_backtrace_m_only_try_zero_begin_free(wf_aligner,cigar,v,h)) {
+    if (wavefront_backtrace_singletrack_try_zero_begin_free(wf_aligner,cigar,v,h)) {
       v = 0;
       h = 0;
     } else {
@@ -981,7 +981,7 @@ failure:
   cigar_clear(cigar);
 cleanup:
   // Release temporary I/D wavefronts exactly once on either outcome.
-  wavefront_backtrace_m_only_free_temps(
+  wavefront_backtrace_singletrack_free_temps(
       wf_aligner,distance_metric,alignment_score);
   return completed;
 }
