@@ -747,32 +747,6 @@ static bool wavefront_backtrace_singletrack_gap(
 }
 
 /**
- * Release every temporary I/D wavefront kept during a Singletrack alignment,
- * for all scores in [0, @p alignment_score].
- *
- * @param wf_aligner The wavefront aligner.
- * @param distance_metric The distance metric (gap_affine or gap_affine_2p).
- * @param alignment_score The score of the alignment.
- */
-static void wavefront_backtrace_singletrack_free_temps(
-    wavefront_aligner_t* const wf_aligner,
-    const distance_metric_t distance_metric,
-    const int alignment_score) {
-  wavefront_components_t* const wf_components = &wf_aligner->wf_components;
-  wavefront_t** const slots[4] = {
-      wf_components->i1wavefronts, wf_components->d1wavefronts,
-      wf_components->i2wavefronts, wf_components->d2wavefronts};
-  const int num_slots = (distance_metric == gap_affine_2p) ? 4 : 2;
-  for (int i=0;i<=alignment_score;++i) {
-    for (int j=0;j<num_slots;++j) {
-      if (slots[j][i] == NULL) continue;
-      wavefront_slab_free(wf_aligner->wavefront_slab,slots[j][i]);
-      slots[j][i] = NULL;
-    }
-  }
-}
-
-/**
  * Retrieve the cigar of the alignment for gap-affine and dual gap-affine
  * using exclusively the information in the M matrix (M wavefronts). This is
  * slightly slower than the general traceback, but it enables storing only
@@ -926,9 +900,6 @@ void wavefront_backtrace_affine_singletrack(
   // Set CIGAR
   ++(cigar->begin_offset);
   cigar->score = alignment_score;
-
-  wavefront_backtrace_singletrack_free_temps(
-      wf_aligner,distance_metric,alignment_score);
 }
 
 /*

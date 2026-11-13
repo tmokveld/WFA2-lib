@@ -398,6 +398,36 @@ void wavefront_compute_free_output(
     wavefront_slab_free(wavefront_slab,wf_components->d2wavefronts[score_mod]);
   }
 }
+/**
+ * Take the I/D wavefront at score @p score - 2 * @p gap_extension, which the
+ * computation no longer needs, so it can be reused at score @p score. Its slot
+ * is cleared and it is returned as a null wavefront, ready to be stored for a
+ * null output or reinitialized for a non-null one. Recycling (and keeping the
+ * chain of recycled wavefronts unbroken) is only done in Singletrack mode.
+ *
+ * @param wf_aligner The wavefront aligner.
+ * @param wavefronts The I/D wavefronts of the component.
+ * @param score The score of the output wavefront.
+ * @param gap_extension The gap-extension penalty of the component.
+ * @return The recycled wavefront (NULL if none or not in Singletrack mode).
+ */
+static wavefront_t* wavefront_compute_recycle_indel(
+    wavefront_aligner_t* const wf_aligner,
+    wavefront_t** const wavefronts,
+    const int score,
+    const int gap_extension) {
+  if (wf_aligner->memory_mode != wavefront_memory_singletrack) return NULL;
+  const int score_recycle = score - 2*gap_extension;
+  if (score_recycle < 0) return NULL;
+  wavefront_t* const wavefront = wavefronts[score_recycle];
+  if (wavefront == NULL) return NULL;
+  wavefronts[score_recycle] = NULL;
+  // Empty range for readers that check lo/hi instead of null (e.g., plot)
+  wavefront->null = true;
+  wavefront->lo =  1;
+  wavefront->hi = -1;
+  return wavefront;
+}
 void wavefront_compute_allocate_output_null(
     wavefront_aligner_t* const wf_aligner,
     const int score) {
@@ -419,53 +449,67 @@ void wavefront_compute_allocate_output_null(
   }
   // Nullify Wavefronts
   if (distance_metric == gap_linear) return;
-  wf_components->i1wavefronts[score_mod] = NULL;
-  wf_components->d1wavefronts[score_mod] = NULL;
+  const wavefront_penalties_t* const penalties = &wf_aligner->penalties;
+  wf_components->i1wavefronts[score_mod] = wavefront_compute_recycle_indel(
+      wf_aligner,wf_components->i1wavefronts,score,penalties->gap_extension1);
+  wf_components->d1wavefronts[score_mod] = wavefront_compute_recycle_indel(
+      wf_aligner,wf_components->d1wavefronts,score,penalties->gap_extension1);
   if (distance_metric == gap_affine) return;
-  wf_components->i2wavefronts[score_mod] = NULL;
-  wf_components->d2wavefronts[score_mod] = NULL;
+  wf_components->i2wavefronts[score_mod] = wavefront_compute_recycle_indel(
+      wf_aligner,wf_components->i2wavefronts,score,penalties->gap_extension2);
+  wf_components->d2wavefronts[score_mod] = wavefront_compute_recycle_indel(
+      wf_aligner,wf_components->d2wavefronts,score,penalties->gap_extension2);
 }
 
 /**
- * Allocate an output I/D wavefront for Singletrack mode, recycling the
- * wavefront in @p candidate_slot (one that left the I/D scope) when it is
- * large enough. Otherwise, the candidate is returned to the slab and a new
- * wavefront is allocated. The candidate slot is always cleared.
+ * Allocate an output I/D wavefront. In Singletrack mode, I/D wavefronts span
+ * every diagonal the alignment can reach, so the wavefront at score
+ * @p score - 2 * @p gap_extension (no longer needed by the computation) can
+ * always be recycled.
  *
  * @param wf_aligner The wavefront aligner.
- * @param candidate_slot The slot holding the wavefront to recycle (may hold
- * NULL).
- * @param effective_lo The lowest diagonal to allocate.
- * @param effective_hi The highest diagonal to allocate.
+ * @param wavefronts The I/D wavefronts of the component.
+ * @param score The score of the output wavefront.
+ * @param gap_extension The gap-extension penalty of the component.
  * @param lo The lowest active diagonal.
  * @param hi The highest active diagonal.
+ * @param effective_lo The lowest diagonal to allocate.
+ * @param effective_hi The highest diagonal to allocate.
  * @return The output wavefront.
  */
-static wavefront_t* wavefront_compute_singletrack_allocate_temp(
+static wavefront_t* wavefront_compute_allocate_output_indel(
     wavefront_aligner_t* const wf_aligner,
-    wavefront_t** const candidate_slot,
-    const int effective_lo,
-    const int effective_hi,
+    wavefront_t** const wavefronts,
+    const int score,
+    const int gap_extension,
     const int lo,
-    const int hi) {
+    const int hi,
+    const int effective_lo,
+    const int effective_hi) {
+  // Parameters
   wavefront_slab_t* const wavefront_slab = wf_aligner->wavefront_slab;
-  const int wf_length = WAVEFRONT_LENGTH(effective_lo,effective_hi);
-  wavefront_t* wavefront = *candidate_slot;
-  *candidate_slot = NULL;
-  if (wavefront != NULL) {
-    if (wf_length <= wavefront->wf_elements_allocated) {
-      wavefront->status = wavefront_status_busy;
-      wavefront_init(wavefront,effective_lo,effective_hi);
-    } else {
-      wavefront_slab_free(wavefront_slab,wavefront);
-      wavefront = wavefront_slab_allocate(wavefront_slab,effective_lo,effective_hi);
-    }
-  } else {
-    wavefront = wavefront_slab_allocate(wavefront_slab,effective_lo,effective_hi);
+  if (wf_aligner->memory_mode != wavefront_memory_singletrack) {
+    return wavefront_slab_allocate(wavefront_slab,effective_lo,effective_hi);
   }
-  wavefront->lo = lo;
-  wavefront->hi = hi;
-  return wavefront;
+  // Trimmed wavefronts stay in [-pattern_length,text_length]
+  // so [lo,hi] reaches 1 beyond, and kernels touch inputs at [lo-1,hi+1]
+  int max_lo = -wf_aligner->sequences.pattern_length - 2;
+  int max_hi = wf_aligner->sequences.text_length + 2;
+  // A static band clamps [lo,hi] to [min_k,max_k]
+  const wavefront_heuristic_t* const heuristic = &wf_aligner->heuristic;
+  if (heuristic->strategy & wf_heuristic_banded_static) {
+    max_lo = MAX(max_lo,heuristic->min_k-1);
+    max_hi = MIN(max_hi,heuristic->max_k+1);
+  }
+  assert(max_lo <= lo-1 && hi+1 <= max_hi);
+  // Recycle out-of-scope wavefront
+  wavefront_t* const wavefront = wavefront_compute_recycle_indel(wf_aligner,wavefronts,score,gap_extension);
+  if (wavefront != NULL) {
+    assert(wavefront->wf_elements_allocated >= WAVEFRONT_LENGTH(max_lo,max_hi));
+    wavefront_init(wavefront,max_lo,max_hi);
+    return wavefront;
+  }
+  return wavefront_slab_allocate(wavefront_slab,max_lo,max_hi);
 }
 void wavefront_compute_allocate_output(
     wavefront_aligner_t* const wf_aligner,
@@ -511,123 +555,58 @@ void wavefront_compute_allocate_output(
   wf_components->mwavefronts[score_mod]->lo = lo;
   wf_components->mwavefronts[score_mod]->hi = hi;
   if (distance_metric == gap_linear) return;
-  if (wf_aligner->memory_mode == wavefront_memory_singletrack) {
-    // We swap I1, D1, I2, D2 wavefronts out of the scope with the new output
-    // I1, D1, I2, D2 wavefronts.
-    // The traceback must be performed using the information in M only.
-    // Allocate I1-Wavefront
-    if (!wavefront_set->in_mwavefront_open1->null || !wavefront_set->in_i1wavefront_ext->null) {
-      const int score_indel1 = score - 2 * wf_aligner->penalties.gap_extension1;
-
-      wavefront_set->out_i1wavefront =
-          (score_indel1 >= 0) ?
-              wavefront_compute_singletrack_allocate_temp(
-                  wf_aligner,&wf_components->i1wavefronts[score_indel1],
-                  effective_lo,effective_hi,lo,hi) :
-              wavefront_slab_allocate(wavefront_slab,effective_lo,effective_hi);
-      wf_components->i1wavefronts[score_mod] = wavefront_set->out_i1wavefront;
-      wf_components->i1wavefronts[score_mod]->lo = lo;
-      wf_components->i1wavefronts[score_mod]->hi = hi;
-    } else {
-      wavefront_set->out_i1wavefront = wf_components->wavefront_victim;
-      wf_components->i1wavefronts[score_mod] = NULL;
-    }
-    // Allocate D1-Wavefront
-    if (!wavefront_set->in_mwavefront_open1->null || !wavefront_set->in_d1wavefront_ext->null) {
-      const int score_indel1 = score - 2 * wf_aligner->penalties.gap_extension1;
-
-      wavefront_set->out_d1wavefront =
-          (score_indel1 >= 0) ?
-              wavefront_compute_singletrack_allocate_temp(
-                  wf_aligner,&wf_components->d1wavefronts[score_indel1],
-                  effective_lo,effective_hi,lo,hi) :
-              wavefront_slab_allocate(wavefront_slab,effective_lo,effective_hi);
-      wf_components->d1wavefronts[score_mod] = wavefront_set->out_d1wavefront;
-      wf_components->d1wavefronts[score_mod]->lo = lo;
-      wf_components->d1wavefronts[score_mod]->hi = hi;
-    } else {
-      wavefront_set->out_d1wavefront = wf_components->wavefront_victim;
-      wf_components->d1wavefronts[score_mod] = NULL;
-    }
-
-    if (distance_metric == gap_affine) return;
-
-    // Allocate I2-Wavefront
-    if (!wavefront_set->in_mwavefront_open2->null || !wavefront_set->in_i2wavefront_ext->null) {
-      const int score_indel2 = score - 2 * wf_aligner->penalties.gap_extension2;
-
-      wavefront_set->out_i2wavefront =
-          (score_indel2 >= 0) ?
-              wavefront_compute_singletrack_allocate_temp(
-                  wf_aligner,&wf_components->i2wavefronts[score_indel2],
-                  effective_lo,effective_hi,lo,hi) :
-              wavefront_slab_allocate(wavefront_slab,effective_lo,effective_hi);
-      wf_components->i2wavefronts[score_mod] = wavefront_set->out_i2wavefront;
-      wf_components->i2wavefronts[score_mod]->lo = lo;
-      wf_components->i2wavefronts[score_mod]->hi = hi;
-    } else {
-      wavefront_set->out_i2wavefront = wf_components->wavefront_victim;
-      wf_components->i2wavefronts[score_mod] = NULL;
-    }
-    // Allocate D2-Wavefront
-    if (!wavefront_set->in_mwavefront_open2->null || !wavefront_set->in_d2wavefront_ext->null) {
-      const int score_indel2 = score - 2 * wf_aligner->penalties.gap_extension2;
-
-      wavefront_set->out_d2wavefront =
-          (score_indel2 >= 0) ?
-              wavefront_compute_singletrack_allocate_temp(
-                  wf_aligner,&wf_components->d2wavefronts[score_indel2],
-                  effective_lo,effective_hi,lo,hi) :
-              wavefront_slab_allocate(wavefront_slab,effective_lo,effective_hi);
-      wf_components->d2wavefronts[score_mod] = wavefront_set->out_d2wavefront;
-      wf_components->d2wavefronts[score_mod]->lo = lo;
-      wf_components->d2wavefronts[score_mod]->hi = hi;
-    } else {
-      wavefront_set->out_d2wavefront = wf_components->wavefront_victim;
-      wf_components->d2wavefronts[score_mod] = NULL;
-    }
-    return;
-  }
   // Allocate I1-Wavefront
   if (!wavefront_set->in_mwavefront_open1->null || !wavefront_set->in_i1wavefront_ext->null) {
-    wavefront_set->out_i1wavefront = wavefront_slab_allocate(wavefront_slab,effective_lo,effective_hi);
+    wavefront_set->out_i1wavefront = wavefront_compute_allocate_output_indel(
+        wf_aligner,wf_components->i1wavefronts,score,
+        wf_aligner->penalties.gap_extension1,lo,hi,effective_lo,effective_hi);
     wf_components->i1wavefronts[score_mod] = wavefront_set->out_i1wavefront;
     wf_components->i1wavefronts[score_mod]->lo = lo;
     wf_components->i1wavefronts[score_mod]->hi = hi;
   } else {
     wavefront_set->out_i1wavefront = wf_components->wavefront_victim;
-    wf_components->i1wavefronts[score_mod] = NULL;
+    wf_components->i1wavefronts[score_mod] = wavefront_compute_recycle_indel(
+        wf_aligner,wf_components->i1wavefronts,score,wf_aligner->penalties.gap_extension1);
   }
   // Allocate D1-Wavefront
   if (!wavefront_set->in_mwavefront_open1->null || !wavefront_set->in_d1wavefront_ext->null) {
-    wavefront_set->out_d1wavefront = wavefront_slab_allocate(wavefront_slab,effective_lo,effective_hi);
+    wavefront_set->out_d1wavefront = wavefront_compute_allocate_output_indel(
+        wf_aligner,wf_components->d1wavefronts,score,
+        wf_aligner->penalties.gap_extension1,lo,hi,effective_lo,effective_hi);
     wf_components->d1wavefronts[score_mod] = wavefront_set->out_d1wavefront;
     wf_components->d1wavefronts[score_mod]->lo = lo;
     wf_components->d1wavefronts[score_mod]->hi = hi;
   } else {
     wavefront_set->out_d1wavefront = wf_components->wavefront_victim;
-    wf_components->d1wavefronts[score_mod] = NULL;
+    wf_components->d1wavefronts[score_mod] = wavefront_compute_recycle_indel(
+        wf_aligner,wf_components->d1wavefronts,score,wf_aligner->penalties.gap_extension1);
   }
   if (distance_metric == gap_affine) return;
   // Allocate I2-Wavefront
   if (!wavefront_set->in_mwavefront_open2->null || !wavefront_set->in_i2wavefront_ext->null) {
-    wavefront_set->out_i2wavefront = wavefront_slab_allocate(wavefront_slab,effective_lo,effective_hi);
+    wavefront_set->out_i2wavefront = wavefront_compute_allocate_output_indel(
+        wf_aligner,wf_components->i2wavefronts,score,
+        wf_aligner->penalties.gap_extension2,lo,hi,effective_lo,effective_hi);
     wf_components->i2wavefronts[score_mod] = wavefront_set->out_i2wavefront;
     wf_components->i2wavefronts[score_mod]->lo = lo;
     wf_components->i2wavefronts[score_mod]->hi = hi;
   } else {
     wavefront_set->out_i2wavefront = wf_components->wavefront_victim;
-    wf_components->i2wavefronts[score_mod] = NULL;
+    wf_components->i2wavefronts[score_mod] = wavefront_compute_recycle_indel(
+        wf_aligner,wf_components->i2wavefronts,score,wf_aligner->penalties.gap_extension2);
   }
   // Allocate D2-Wavefront
   if (!wavefront_set->in_mwavefront_open2->null || !wavefront_set->in_d2wavefront_ext->null) {
-    wavefront_set->out_d2wavefront = wavefront_slab_allocate(wavefront_slab,effective_lo,effective_hi);
+    wavefront_set->out_d2wavefront = wavefront_compute_allocate_output_indel(
+        wf_aligner,wf_components->d2wavefronts,score,
+        wf_aligner->penalties.gap_extension2,lo,hi,effective_lo,effective_hi);
     wf_components->d2wavefronts[score_mod] = wavefront_set->out_d2wavefront;
     wf_components->d2wavefronts[score_mod]->lo = lo;
     wf_components->d2wavefronts[score_mod]->hi = hi;
   } else {
     wavefront_set->out_d2wavefront = wf_components->wavefront_victim;
-    wf_components->d2wavefronts[score_mod] = NULL;
+    wf_components->d2wavefronts[score_mod] = wavefront_compute_recycle_indel(
+        wf_aligner,wf_components->d2wavefronts,score,wf_aligner->penalties.gap_extension2);
   }
 }
 /*
