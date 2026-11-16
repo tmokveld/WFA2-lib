@@ -48,6 +48,28 @@
 #include "wavefront_backtrace.h"
 #include "wavefront_backtrace_buffer.h"
 
+/**
+ * Decide whether the current alignment uses the Singletrack backtrace. It
+ * replaces the classic high-memory backtrace for full gap-affine/affine2p
+ * alignments.
+ *
+ * @param wf_aligner The wavefront aligner (sequences already set).
+ * @return True if the alignment must use the Singletrack backtrace.
+ */
+bool wavefront_unialign_singletrack(
+    wavefront_aligner_t* const wf_aligner) {
+  // Parameters
+  const wavefront_sequences_t* const sequences = &wf_aligner->sequences;
+  const distance_metric_t distance_metric = wf_aligner->penalties.distance_metric;
+  // Checks
+  if (wf_aligner->memory_mode != wavefront_memory_high) return false;
+  if (wf_aligner->align_mode != wf_align_regular) return false;
+  if (wf_aligner->alignment_scope != compute_alignment) return false;
+  if (distance_metric != gap_affine && distance_metric != gap_affine_2p) return false;
+  if (sequences->mode == wf_sequences_lambda) return false;
+  return true;
+}
+
 /*
  * Initialize alignment
  */
@@ -88,6 +110,7 @@ void wavefront_unialign_init(
   // Initialize wavefront-aligner (to perform a new alignment)
   wf_aligner->component_begin = component_begin;
   wf_aligner->component_end = component_end;
+  wf_aligner->singletrack = wavefront_unialign_singletrack(wf_aligner);
   wavefront_aligner_init(wf_aligner,0);
   // Clear cigar
   cigar_clear(wf_aligner->cigar);
@@ -193,7 +216,7 @@ void wavefront_unialign_terminate(
         if (wf_aligner->penalties.distance_metric <= gap_linear) {
           wavefront_backtrace_linear(wf_aligner,
               score,alignment_end_k,alignment_end_offset);
-        } else if (wf_aligner->memory_mode == wavefront_memory_singletrack) {
+        } else if (wf_aligner->singletrack) {
           // Drop heuristics (Z-drop) can select an endpoint reached at an
           // earlier score. The M-only traceback must start from that score.
           const int alignment_end_score =

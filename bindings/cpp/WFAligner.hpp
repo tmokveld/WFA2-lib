@@ -54,7 +54,6 @@ public:
     MemoryMed,
     MemoryLow,
     MemoryUltralow,
-    MemorySingletrack,
   };
   enum AlignmentScope {
     Score,

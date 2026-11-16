@@ -244,6 +244,7 @@ void wavefront_aligner_init_alignment(
   wavefront_aligner_init_penalties(wf_aligner,attributes);
   // Memory mode
   wf_aligner->memory_mode = attributes->memory_mode;
+  wf_aligner->singletrack = false;
   wavefront_aligner_init_heuristic(wf_aligner,attributes);
 }
 /*
@@ -425,19 +426,6 @@ wavefront_aligner_t* wavefront_aligner_new(
     wavefront_aligner_attr_t* attributes) {
   // Parameters
   if (attributes == NULL) attributes = &wavefront_aligner_attr_default;
-  if (attributes->memory_mode == wavefront_memory_singletrack) {
-    const bool supported_metric =
-        attributes->distance_metric == gap_affine ||
-        attributes->distance_metric == gap_affine_2p;
-    if (!supported_metric) {
-      fprintf(stderr,"[WFA] Singletrack memory mode only supports gap-affine and gap-affine-2p distances\n");
-      exit(1);
-    }
-    if (attributes->alignment_scope != compute_alignment) {
-      fprintf(stderr,"[WFA] Singletrack memory mode requires full alignment scope\n");
-      exit(1);
-    }
-  }
   const bool score_only = (attributes->alignment_scope == compute_score);
   const bool memory_succint =
       attributes->memory_mode == wavefront_memory_med ||
@@ -741,7 +729,6 @@ void wavefront_aligner_print_conf(
     case wavefront_memory_med: fprintf(stream,"MMed"); break;
     case wavefront_memory_low: fprintf(stream,"MLow"); break;
     case wavefront_memory_ultralow: fprintf(stream,"BiWFA"); break;
-    case wavefront_memory_singletrack: fprintf(stream,"MSingletrack"); break;
   }
   if (wf_aligner->system.max_alignment_steps == INT_MAX) {
     fprintf(stream,",inf)");

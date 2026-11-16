@@ -403,20 +403,20 @@ void wavefront_compute_free_output(
  * computation no longer needs, so it can be reused at score @p score. Its slot
  * is cleared and it is returned as a null wavefront, ready to be stored for a
  * null output or reinitialized for a non-null one. Recycling (and keeping the
- * chain of recycled wavefronts unbroken) is only done in Singletrack mode.
+ * chain of recycled wavefronts unbroken) is only done for Singletrack alignments.
  *
  * @param wf_aligner The wavefront aligner.
  * @param wavefronts The I/D wavefronts of the component.
  * @param score The score of the output wavefront.
  * @param gap_extension The gap-extension penalty of the component.
- * @return The recycled wavefront (NULL if none or not in Singletrack mode).
+ * @return The recycled wavefront (NULL if none or not a Singletrack alignment).
  */
 static wavefront_t* wavefront_compute_recycle_indel(
     wavefront_aligner_t* const wf_aligner,
     wavefront_t** const wavefronts,
     const int score,
     const int gap_extension) {
-  if (wf_aligner->memory_mode != wavefront_memory_singletrack) return NULL;
+  if (!wf_aligner->singletrack) return NULL;
   const int score_recycle = score - 2*gap_extension;
   if (score_recycle < 0) return NULL;
   wavefront_t* const wavefront = wavefronts[score_recycle];
@@ -462,7 +462,7 @@ void wavefront_compute_allocate_output_null(
 }
 
 /**
- * Allocate an output I/D wavefront. In Singletrack mode, I/D wavefronts span
+ * Allocate an output I/D wavefront. In Singletrack alignments, I/D wavefronts span
  * every diagonal the alignment can reach, so the wavefront at score
  * @p score - 2 * @p gap_extension (no longer needed by the computation) can
  * always be recycled.
@@ -488,7 +488,7 @@ static wavefront_t* wavefront_compute_allocate_output_indel(
     const int effective_hi) {
   // Parameters
   wavefront_slab_t* const wavefront_slab = wf_aligner->wavefront_slab;
-  if (wf_aligner->memory_mode != wavefront_memory_singletrack) {
+  if (!wf_aligner->singletrack) {
     return wavefront_slab_allocate(wavefront_slab,effective_lo,effective_hi);
   }
   // Trimmed wavefronts stay in [-pattern_length,text_length]
