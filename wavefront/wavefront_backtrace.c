@@ -865,37 +865,21 @@ void wavefront_backtrace_affine_singletrack(
                          l * penalties->gap_extension1;
       const int indel2 = (distance_metric == gap_affine_2p) ?
           score - penalties->gap_opening2 - l * penalties->gap_extension2 : -1;
-      if (indel1 < 0 && indel2 < 0) {
-        fprintf(stderr,"[WFA::Backtrace] Singletrack backtrace error (no predecessor found)\n");
-        if (sequences->mode != wf_sequences_lambda) {
-          fprintf(stderr,">%.*s\n",pattern_length,sequences->pattern);
-          fprintf(stderr,"<%.*s\n",text_length,sequences->text);
-        }
-        exit(-1);
-      }
       if (wavefront_backtrace_singletrack_gap(
-              wf_aligner,cigar,indel1,l,offset_orig,&k,&offset)) {
+            wf_aligner,cigar,indel1,l,offset_orig,&k,&offset)) {
         score = indel1;
         in_mmatrix = true;
       } else if (wavefront_backtrace_singletrack_gap(
-              wf_aligner,cigar,indel2,l,offset_orig,&k,&offset)) {
+                  wf_aligner,cigar,indel2,l,offset_orig,&k,&offset)) {
         score = indel2;
         in_mmatrix = true;
+      } else if (indel1 < 0 && indel2 < 0) {
+        break; // No source (reported below, as in_mmatrix is false)
       }
     }
   }
 
-  // Account for last operations. The traceback loop above relies on every
-  // score-consuming operation strictly decreasing the score.
-  // wavefront_penalties_set_*() enforces these internal penalty invariants.
-  assert(penalties->mismatch > 0);
-  if (distance_metric == gap_affine || distance_metric == gap_affine_2p) {
-    assert(penalties->gap_extension1 > 0);
-  }
-  if (distance_metric == gap_affine_2p) {
-    assert(penalties->gap_extension2 > 0);
-  }
-
+  // Account for last operations
   v = WAVEFRONT_V(k,offset);
   h = WAVEFRONT_H(k,offset);
   if (in_mmatrix &&
@@ -904,7 +888,9 @@ void wavefront_backtrace_affine_singletrack(
   } else if (in_mmatrix && k == 0) {
     wavefront_backtrace_add_lut_to_cigar(cigar,matches_lut,offset);
   } else {
-    fprintf(stderr,"[WFA::Backtrace] Singletrack beginning backtrace error\n");
+    fprintf(stderr,"[WFA::Backtrace] Singletrack backtrace error (%s)\n",
+        in_mmatrix ? "traceback ended outside the alignment origin" :
+                     "no source found in the M wavefronts");
     if (sequences->mode != wf_sequences_lambda) {
       fprintf(stderr,">%.*s\n",pattern_length,sequences->pattern);
       fprintf(stderr,"<%.*s\n",text_length,sequences->text);
