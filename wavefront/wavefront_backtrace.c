@@ -597,6 +597,8 @@ void wavefront_backtrace_affine(
  * Count the consecutive matching characters that end at cell (@p v, @p h),
  * walking backwards along the diagonal. The count is bounded by
  * MIN(@p v, @p h) so it never reads before the start of either sequence.
+ * Lambda inputs are compared one position at a time with the custom match
+ * function.
  *
  * @param wf_aligner The wavefront aligner.
  * @param v The pattern position (vertical coordinate) of the cell.
@@ -607,10 +609,19 @@ static int wavefront_backtrace_singletrack_count_backward_matches(
     wavefront_aligner_t* const wf_aligner,
     const int v,
     const int h) {
-  const char* const pattern = wf_aligner->sequences.pattern;
-  const char* const text = wf_aligner->sequences.text;
+  wavefront_sequences_t* const sequences = &wf_aligner->sequences;
   const int max_matches = MIN(v,h);
   int nmatches = 0;
+  // Custom match function (no sequence buffers)
+  if (sequences->mode == wf_sequences_lambda) {
+    while (nmatches < max_matches &&
+           wavefront_sequences_cmp(sequences,v-nmatches-1,h-nmatches-1)) {
+      ++nmatches;
+    }
+    return nmatches;
+  }
+  const char* const pattern = sequences->pattern;
+  const char* const text = sequences->text;
 #if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
   // Blocked backwards extend, bounded to avoid reading before free-start edges.
   while (nmatches + 8 <= max_matches) {
@@ -856,8 +867,10 @@ void wavefront_backtrace_affine_singletrack(
           score - penalties->gap_opening2 - l * penalties->gap_extension2 : -1;
       if (indel1 < 0 && indel2 < 0) {
         fprintf(stderr,"[WFA::Backtrace] Singletrack backtrace error (no predecessor found)\n");
-        fprintf(stderr,">%.*s\n",pattern_length,sequences->pattern);
-        fprintf(stderr,"<%.*s\n",text_length,sequences->text);
+        if (sequences->mode != wf_sequences_lambda) {
+          fprintf(stderr,">%.*s\n",pattern_length,sequences->pattern);
+          fprintf(stderr,"<%.*s\n",text_length,sequences->text);
+        }
         exit(-1);
       }
       if (wavefront_backtrace_singletrack_gap(
@@ -892,8 +905,10 @@ void wavefront_backtrace_affine_singletrack(
     wavefront_backtrace_add_lut_to_cigar(cigar,matches_lut,offset);
   } else {
     fprintf(stderr,"[WFA::Backtrace] Singletrack beginning backtrace error\n");
-    fprintf(stderr,">%.*s\n",pattern_length,sequences->pattern);
-    fprintf(stderr,"<%.*s\n",text_length,sequences->text);
+    if (sequences->mode != wf_sequences_lambda) {
+      fprintf(stderr,">%.*s\n",pattern_length,sequences->pattern);
+      fprintf(stderr,"<%.*s\n",text_length,sequences->text);
+    }
     exit(-1);
   }
 

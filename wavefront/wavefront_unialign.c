@@ -59,14 +59,12 @@
 bool wavefront_unialign_singletrack(
     wavefront_aligner_t* const wf_aligner) {
   // Parameters
-  const wavefront_sequences_t* const sequences = &wf_aligner->sequences;
   const distance_metric_t distance_metric = wf_aligner->penalties.distance_metric;
   // Checks
   if (wf_aligner->memory_mode != wavefront_memory_high) return false;
   if (wf_aligner->align_mode != wf_align_regular) return false;
   if (wf_aligner->alignment_scope != compute_alignment) return false;
   if (distance_metric != gap_affine && distance_metric != gap_affine_2p) return false;
-  if (sequences->mode == wf_sequences_lambda) return false;
   return true;
 }
 
