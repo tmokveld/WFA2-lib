@@ -645,72 +645,6 @@ static int wavefront_backtrace_singletrack_count_backward_matches(
 }
 
 /**
- * Check whether cell (@p v, @p h) is a free starting point of an ends-free
- * alignment with a match bonus (match < 0). The cell must lie on the first
- * row or column, within the begin-free limits, and @p score must equal the
- * score assigned to that free starting cell.
- *
- * @param wf_aligner The wavefront aligner.
- * @param score The remaining score of the traceback.
- * @param v The pattern position (vertical coordinate) of the cell.
- * @param h The text position (horizontal coordinate) of the cell.
- * @return True if the traceback can stop at (@p v, @p h).
- */
-static bool wavefront_backtrace_singletrack_is_begin_free(
-    wavefront_aligner_t* const wf_aligner,
-    const int score,
-    const int v,
-    const int h) {
-  const alignment_form_t* const form = &wf_aligner->alignment_form;
-  const wavefront_penalties_t* const penalties = &wf_aligner->penalties;
-  if (form->span != alignment_endsfree || penalties->match >= 0) return false;
-  const int match_score = -penalties->match;
-  if (v == 0 && h > 0 && h <= form->text_begin_free &&
-      score == h * match_score) {
-    return true;
-  }
-  if (h == 0 && v > 0 && v <= form->pattern_begin_free &&
-      score == v * match_score) {
-    return true;
-  }
-  return false;
-}
-
-/**
- * Close the traceback of an ends-free alignment with a zero match penalty.
- * If the diagonal of cell (@p v, @p h) is within the begin-free limits,
- * prepend MIN(@p v, @p h) matches followed (backwards) by the leading free
- * insertions or deletions that reach the origin.
- *
- * @param wf_aligner The wavefront aligner.
- * @param cigar The CIGAR.
- * @param v The pattern position (vertical coordinate) of the cell.
- * @param h The text position (horizontal coordinate) of the cell.
- * @return True if the remaining operations were added to the CIGAR.
- */
-static bool wavefront_backtrace_singletrack_try_zero_begin_free(
-    wavefront_aligner_t* const wf_aligner,
-    cigar_t* const cigar,
-    const int v,
-    const int h) {
-  const alignment_form_t* const form = &wf_aligner->alignment_form;
-  const wavefront_penalties_t* const penalties = &wf_aligner->penalties;
-  if (form->span != alignment_endsfree || penalties->match != 0) return false;
-  const int k = h - v;
-  if (k >= 0 && k <= form->text_begin_free) {
-    wavefront_backtrace_add_lut_to_cigar(cigar,matches_lut,v);
-    wavefront_backtrace_add_lut_to_cigar(cigar,insertions_lut,k);
-    return true;
-  }
-  if (k < 0 && -k <= form->pattern_begin_free) {
-    wavefront_backtrace_add_lut_to_cigar(cigar,matches_lut,h);
-    wavefront_backtrace_add_lut_to_cigar(cigar,deletions_lut,-k);
-    return true;
-  }
-  return false;
-}
-
-/**
  * Look for an M cell at score @p gap_score from which an insertion
  * (diagonal *@p k - @p l) or a deletion (diagonal *@p k + @p l) of length
  * @p l, followed by matches, reaches an offset in [@p offset_orig, *@p offset].
@@ -828,20 +762,6 @@ void wavefront_backtrace_affine_singletrack(
           wavefront_backtrace_singletrack_count_backward_matches(wf_aligner,v,h);
       offset_orig = offset - nmatches;
 
-      // Ends-free with match bonus: stop at a free starting cell.
-      const int v_orig = WAVEFRONT_V(k,offset_orig);
-      const int h_orig = WAVEFRONT_H(k,offset_orig);
-      if (wavefront_backtrace_singletrack_is_begin_free(
-              wf_aligner,score,v_orig,h_orig)) {
-        wavefront_backtrace_add_lut_to_cigar(cigar,matches_lut,nmatches);
-        wavefront_backtrace_add_lut_to_cigar(cigar,insertions_lut,h_orig);
-        wavefront_backtrace_add_lut_to_cigar(cigar,deletions_lut,v_orig);
-        score = 0;
-        k = 0;
-        offset = 0;
-        break;
-      }
-
       // If we come from a mismatch, then the backwards extend is correct.
       const int mismatch = score - penalties->mismatch;
       wf_offset_t m_offset;
@@ -874,7 +794,10 @@ void wavefront_backtrace_affine_singletrack(
         score = indel2;
         in_mmatrix = true;
       } else if (indel1 < 0 && indel2 < 0) {
-        break; // No source (reported below, as in_mmatrix is false)
+        // No source. Only valid at an ends-free start on the first row/column
+        in_mmatrix = (WAVEFRONT_V(k,offset_orig) == 0 ||
+                      WAVEFRONT_H(k,offset_orig) == 0);
+        break;
       }
     }
   }
@@ -882,21 +805,26 @@ void wavefront_backtrace_affine_singletrack(
   // Account for last operations
   v = WAVEFRONT_V(k,offset);
   h = WAVEFRONT_H(k,offset);
-  if (in_mmatrix &&
-      wavefront_backtrace_singletrack_try_zero_begin_free(wf_aligner,cigar,v,h)) {
-    // Ends-free with zero match penalty: leading free gap already added.
-  } else if (in_mmatrix && k == 0) {
-    wavefront_backtrace_add_lut_to_cigar(cigar,matches_lut,offset);
-  } else {
-    fprintf(stderr,"[WFA::Backtrace] Singletrack backtrace error (%s)\n",
-        in_mmatrix ? "traceback ended outside the alignment origin" :
-                     "no source found in the M wavefronts");
+  const int num_matches = MIN(v,h);
+  v -= num_matches;
+  h -= num_matches;
+  // Leading gaps are only allowed within the begin-free limits (0 if end-to-end)
+  if (!in_mmatrix ||
+      v > wf_aligner->alignment_form.pattern_begin_free ||
+      h > wf_aligner->alignment_form.text_begin_free) {
+    fprintf(stderr,"[WFA::Backtrace] Singletrack backtrace error "
+                   "(could not trace back to a valid alignment start)\n");
     if (sequences->mode != wf_sequences_lambda) {
       fprintf(stderr,">%.*s\n",pattern_length,sequences->pattern);
       fprintf(stderr,"<%.*s\n",text_length,sequences->text);
     }
     exit(-1);
   }
+  // Account for beginning series of matches
+  wavefront_backtrace_add_lut_to_cigar(cigar,matches_lut,num_matches);
+  // Account for beginning insertions/deletions
+  wavefront_backtrace_add_lut_to_cigar(cigar,deletions_lut,v);
+  wavefront_backtrace_add_lut_to_cigar(cigar,insertions_lut,h);
 
   // Set CIGAR
   ++(cigar->begin_offset);
