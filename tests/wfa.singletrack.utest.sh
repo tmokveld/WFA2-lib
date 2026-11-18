@@ -186,6 +186,8 @@ expect_reject() {
 
 expect_reject "score-only" -a gap-affine-wfa --wfa-memory=singletrack --wfa-score-only
 expect_reject "edit" -a edit-wfa --wfa-memory=singletrack
-expect_reject "lambda" -a gap-affine-wfa --wfa-memory=singletrack --wfa-lambda
+# The benchmark's lambda compares the same bases as the ASCII input path.
+"$BIN" -i "$INPUT" -o "$WORKDIR/lambda.alg" -a gap-affine-wfa --wfa-memory=singletrack --wfa-lambda
+diff -u "$SCRIPT_DIR/wfa.utest.check/test.affine.alg" "$WORKDIR/lambda.alg"
 
 echo ">>> Singletrack tests passed ($WORKDIR)"

@@ -822,6 +822,13 @@ def check_endsfree(align_benchmark: Path, workdir: Path) -> None:
                         high_row,
                         singletrack_row,
                     ):
+                        # Both memory modes use the same traceback. Agreement on
+                        # an empty CIGAR is not success for an unpruned alignment.
+                        if heuristic_label == "none":
+                            raise AssertionError(
+                                f"ends-free {config_label} {free_label} case {idx}: "
+                                f"no alignment for {high_row.pattern!r}, {high_row.text!r}"
+                            )
                         continue
                     pattern = high_row.pattern
                     text = high_row.text

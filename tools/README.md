@@ -196,13 +196,13 @@ checkout branch `benchmark`.
             breakpoint scoring is available. Ultralow extension mode remains unsupported.
             Supported ultralow ends-free results are optimal legal alignments, but their
             CIGAR or endpoint tie-breaking can differ from high-memory WFA.
-            The singletrack mode is available for full-scope
-            global, ends-free, and extension gap-affine and dual gap-affine WFA alignments,
-            including adaptive, drop, and banded WFA heuristic modes.
+            High mode uses Singletrack for full-CIGAR global, ends-free, and extension
+            gap-affine and dual gap-affine alignments. The singletrack mode requests the
+            same traceback explicitly. Both support adaptive, drop, and banded heuristics.
             Heuristic-enabled Singletrack alignments
             return a CIGAR consistent with the heuristic result, not necessarily a globally
             optimal alignment.
-            Singletrack directly accesses padded sequence buffers; use ASCII or packed2bits inputs.
+            Singletrack accepts ASCII, packed2bits, and custom-match inputs.
 
           --minimum-wavefront-length <INT>
             Selects the minimum wavefront length to trigger the WFA-Adapt reduction method.

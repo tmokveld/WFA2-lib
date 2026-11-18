@@ -100,31 +100,18 @@ do
     cat "$LOG.xdrop" >> "$LOG"
 done
 
-# Intra-tests
-diff $PREFIX/wfa.utest.check/test.edit.alg      $PREFIX/wfa.utest.check/test.pb.edit.alg >> $LOG.correct 2>&1
-diff $PREFIX/wfa.utest.check/test.indel.alg     $PREFIX/wfa.utest.check/test.pb.indel.alg >> $LOG.correct 2>&1
-diff $PREFIX/wfa.utest.check/test.affine.alg    $PREFIX/wfa.utest.check/test.pb.affine.alg >> $LOG.correct 2>&1
-diff $PREFIX/wfa.utest.check/test.affine2p.alg  $PREFIX/wfa.utest.check/test.pb.affine2p.alg >> $LOG.correct 2>&1
-diff $PREFIX/wfa.utest.check/test.affine.p0.alg $PREFIX/wfa.utest.check/test.pb.affine.p0.alg >> $LOG.correct 2>&1
-diff $PREFIX/wfa.utest.check/test.affine.p1.alg $PREFIX/wfa.utest.check/test.pb.affine.p1.alg >> $LOG.correct 2>&1
-diff $PREFIX/wfa.utest.check/test.affine.p2.alg $PREFIX/wfa.utest.check/test.pb.affine.p2.alg >> $LOG.correct 2>&1
-diff $PREFIX/wfa.utest.check/test.affine.p3.alg $PREFIX/wfa.utest.check/test.pb.affine.p3.alg >> $LOG.correct 2>&1
-diff $PREFIX/wfa.utest.check/test.affine.p4.alg $PREFIX/wfa.utest.check/test.pb.affine.p4.alg >> $LOG.correct 2>&1
-diff $PREFIX/wfa.utest.check/test.affine.p5.alg $PREFIX/wfa.utest.check/test.pb.affine.p5.alg >> $LOG.correct 2>&1
-diff $PREFIX/wfa.utest.check/test.affine.wfapt0.alg $PREFIX/wfa.utest.check/test.pb.affine.wfapt0.alg >> $LOG.correct 2>&1
-diff $PREFIX/wfa.utest.check/test.affine.wfapt1.alg $PREFIX/wfa.utest.check/test.pb.affine.wfapt1.alg >> $LOG.correct 2>&1
-$CMP_SCORE $PREFIX/wfa.utest.check/test.edit.alg      $PREFIX/wfa.utest.check/test.biwfa.edit.alg >> $LOG.correct 2>&1
-$CMP_SCORE $PREFIX/wfa.utest.check/test.indel.alg     $PREFIX/wfa.utest.check/test.biwfa.indel.alg >> $LOG.correct 2>&1
-$CMP_SCORE $PREFIX/wfa.utest.check/test.affine.alg    $PREFIX/wfa.utest.check/test.biwfa.affine.alg >> $LOG.correct 2>&1
-$CMP_SCORE $PREFIX/wfa.utest.check/test.affine2p.alg  $PREFIX/wfa.utest.check/test.biwfa.affine2p.alg >> $LOG.correct 2>&1
-$CMP_SCORE $PREFIX/wfa.utest.check/test.affine.p0.alg $PREFIX/wfa.utest.check/test.biwfa.affine.p0.alg >> $LOG.correct 2>&1
-$CMP_SCORE $PREFIX/wfa.utest.check/test.affine.p1.alg $PREFIX/wfa.utest.check/test.biwfa.affine.p1.alg >> $LOG.correct 2>&1
-$CMP_SCORE $PREFIX/wfa.utest.check/test.affine.p2.alg $PREFIX/wfa.utest.check/test.biwfa.affine.p2.alg >> $LOG.correct 2>&1
-$CMP_SCORE $PREFIX/wfa.utest.check/test.affine.p3.alg $PREFIX/wfa.utest.check/test.biwfa.affine.p3.alg >> $LOG.correct 2>&1
-$CMP_SCORE $PREFIX/wfa.utest.check/test.affine.p4.alg $PREFIX/wfa.utest.check/test.biwfa.affine.p4.alg >> $LOG.correct 2>&1
-$CMP_SCORE $PREFIX/wfa.utest.check/test.affine.p5.alg $PREFIX/wfa.utest.check/test.biwfa.affine.p5.alg >> $LOG.correct 2>&1
-$CMP_SCORE $PREFIX/wfa.utest.check/test.affine.wfapt0.alg $PREFIX/wfa.utest.check/test.biwfa.affine.wfapt0.alg >> $LOG.correct 2>&1
-$CMP_SCORE $PREFIX/wfa.utest.check/test.affine.wfapt1.alg $PREFIX/wfa.utest.check/test.biwfa.affine.wfapt1.alg >> $LOG.correct 2>&1
+# Compare scores across traceback algorithms; Singletrack and BiWFA can
+# choose different optimal CIGARs. Edit/indel piggyback ties are unchanged.
+for metric in edit indel affine affine2p affine.p{0..5} affine.wfapt{0,1}; do
+    base="$OUTPUT/test.$metric.alg"
+    piggyback="$OUTPUT/test.pb.$metric.alg"
+    if [[ "$metric" == edit || "$metric" == indel ]]; then
+        diff "$base" "$piggyback" || exit 1
+    else
+        "$CMP_SCORE" "$base" "$piggyback" || exit 1
+    fi
+    "$CMP_SCORE" "$base" "$OUTPUT/test.biwfa.$metric.alg" || exit 1
+done
 
 # Summary tests (*.correct,*.time,*.mem)
 grep "Alignments.Correct" $LOG >> $LOG.correct

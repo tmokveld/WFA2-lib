@@ -102,7 +102,7 @@ typedef struct {
  * Low-memory modes
  */
 typedef enum {
-  wavefront_memory_high     = 0, // High-memore mode (fastest, stores all WFs explicitly)
+  wavefront_memory_high     = 0, // High-memory mode (Singletrack for full affine/affine2p alignments)
   wavefront_memory_med      = 1, // Succing-memory mode piggyback-based (medium, offloads half-full BT-blocks)
   wavefront_memory_low      = 2, // Succing-memory mode piggyback-based (slow, offloads only full BT-blocks)
   wavefront_memory_ultralow = 3, // Bidirectional WFA

@@ -156,10 +156,6 @@ int wavefront_align_lambda(
     const int text_length) {
   // Checks
   wavefront_align_presets__checks(wf_aligner,pattern_length,text_length);
-  if (wf_aligner->memory_mode == wavefront_memory_singletrack) {
-    fprintf(stderr,"[WFA] Singletrack memory mode does not support lambda/custom sequence inputs\n");
-    exit(1);
-  }
   wavefront_debug_begin(wf_aligner);
   // Plot
   if (wf_aligner->plot != NULL) wavefront_plot_resize(wf_aligner->plot,pattern_length,text_length);
